@@ -1,0 +1,21 @@
+# Data
+data/raw/
+data/processed/
+
+# Database / outputs
+*.db
+*.sqlite
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
