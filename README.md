@@ -28,7 +28,7 @@ The targeted promotion generates statistically significant incremental revenue a
 
 ### Average Treatment Effect (ATE)
 
-![ATE Lift](docs/images/ate_ci.png)
+![ATE Lift](docs/images/ate_lift.png)
 
 Estimated incremental revenue lift from the targeted promotion with 95% confidence interval.
 
@@ -36,7 +36,7 @@ Estimated incremental revenue lift from the targeted promotion with 95% confiden
 
 ### Difference-in-Differences Trend
 
-![DiD Trend](docs/images/did_trend.png)
+![DiD Trend](docs/images/did_trends.png)
 
 Pre vs post comparison of treatment and control revenue trends used to validate the causal inference framework.
 
