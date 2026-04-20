@@ -256,7 +256,7 @@ elif section == "ATE":
 elif section == "Event Study":
     st.header("Event Study / Dynamic Treatment Effects")
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(7, 3.8))
     ax.errorbar(
         event_df["event_time"],
         event_df["coef"],
@@ -269,7 +269,8 @@ elif section == "Event Study":
     ax.set_xlabel("Week (Event Time)")
     ax.set_ylabel("Estimated Effect")
     ax.set_title("Event Study: Relative Weekly Effects")
-    st.pyplot(fig)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
 
     st.write(
         "Event-study diagnostics show that treated users exhibited higher pre-treatment trends, "
@@ -285,14 +286,15 @@ elif section == "Model Comparison":
     st.header("Model Comparison")
     st.dataframe(model_table, use_container_width=True)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(7, 3.8))
     ax.bar(model_table["Model"], model_table["Lift ($)"])
     ax.axhline(0)
     ax.set_title("Treatment Effect Estimates Across Models")
     ax.set_ylabel("Estimated Lift ($)")
     ax.set_xlabel("Model")
     plt.xticks(rotation=20)
-    st.pyplot(fig)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
 
     st.write("""
     Because treatment was randomly assigned, the post-period ATE provides the most credible estimate of average causal impact.
@@ -330,12 +332,13 @@ elif section == "HTE":
     st.header("Heterogeneous Treatment Effects")
     st.dataframe(hte_df, use_container_width=True)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(7, 3.8))
     ax.plot(hte_df["quartile"], hte_df["lift"], marker="o")
     ax.set_title("Lift by Baseline Spend Quartile")
     ax.set_xlabel("Baseline Spend Quartile")
     ax.set_ylabel("Lift ($)")
-    st.pyplot(fig)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
 
     st.write("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating larger absolute revenue gains.
