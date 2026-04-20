@@ -270,7 +270,7 @@ elif section == "Event Study":
     ax.set_ylabel("Estimated Effect")
     ax.set_title("Event Study: Relative Weekly Effects")
     plt.tight_layout()
-    st.pyplot(fig, use_container_width=True)
+    st.pyplot(fig, width="stretch")
 
     st.write(
         "Event-study diagnostics show that treated users exhibited higher pre-treatment trends, "
@@ -294,7 +294,7 @@ elif section == "Model Comparison":
     ax.set_xlabel("Model")
     plt.xticks(rotation=20)
     plt.tight_layout()
-    st.pyplot(fig, use_container_width=True)
+    st.pyplot(fig, width="stretch")
 
     st.write("""
     Because treatment was randomly assigned, the post-period ATE provides the most credible estimate of average causal impact.
@@ -338,7 +338,7 @@ elif section == "HTE":
     ax.set_xlabel("Baseline Spend Quartile")
     ax.set_ylabel("Lift ($)")
     plt.tight_layout()
-    st.pyplot(fig, use_container_width=True)
+    st.pyplot(fig, width="stretch")
 
     st.write("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating larger absolute revenue gains.
