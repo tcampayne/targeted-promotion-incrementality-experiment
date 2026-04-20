@@ -1,6 +1,5 @@
+streamlit
 pandas
 numpy
 matplotlib
-statsmodels
-psycopg2
-jupyter
+scikit-learn
