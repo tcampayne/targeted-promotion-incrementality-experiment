@@ -1,21 +1,51 @@
+# =========================
 # Data
-data/raw/
-data/processed/
+# =========================
 
-# Database / outputs
+# Ignore raw data
+data/raw/
+
+# Ignore processed data EXCEPT the main app dataset
+data/processed/*
+!data/processed/panel_df.csv
+
+
+# =========================
+# Database / Outputs
+# =========================
 *.db
 *.sqlite
 *.log
 
+
+# =========================
 # Python
+# =========================
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
 .venv/
+venv/
+env/
+
+
+# =========================
+# Jupyter
+# =========================
 .ipynb_checkpoints/
 
-# Env
+
+# =========================
+# Env / Secrets
+# =========================
 .env
 
+
+# =========================
 # OS
+# =========================
 .DS_Store
 Thumbs.db
