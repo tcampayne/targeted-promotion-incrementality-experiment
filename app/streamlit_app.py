@@ -90,23 +90,48 @@ def compute_model_table() -> pd.DataFrame:
 
 @st.cache_data
 def compute_event_study_series(df: pd.DataFrame) -> pd.DataFrame:
-    weekly = (
-        df.groupby(["event_time", "treatment_flag"], as_index=False)["revenue_sim"]
-        .mean()
-        .pivot(index="event_time", columns="treatment_flag", values="revenue_sim")
-        .reset_index()
-        .rename(columns={0: "control_mean", 1: "treated_mean"})
+    import statsmodels.formula.api as smf
+
+    event_df = df.copy()
+
+    # Make sure event_time exists and is integer
+    event_df["event_time"] = event_df["event_time"].astype(int)
+
+    # Use week -1 as the omitted reference period
+    event_df["event_time_cat"] = event_df["event_time"].astype(str)
+    event_df["event_time_cat"] = pd.Categorical(
+        event_df["event_time_cat"],
+        categories=[str(x) for x in sorted(event_df["event_time"].unique())],
+        ordered=True
     )
 
-    weekly["diff"] = weekly["treated_mean"] - weekly["control_mean"]
+    # TWFE event study:
+    # revenue ~ event-time x treatment interactions + user FE + week FE
+    model = smf.ols(
+        'revenue_sim ~ C(event_time_cat, Treatment(reference="-1")):treatment_flag + C(user_id) + C(week_index)',
+        data=event_df
+    ).fit(cov_type="cluster", cov_kwds={"groups": event_df["user_id"]})
 
-    ref_row = weekly.loc[weekly["event_time"] == -1, "diff"]
-    ref = ref_row.iloc[0] if not ref_row.empty else 0.0
-    weekly["coef"] = weekly["diff"] - ref
+    rows = []
 
-    approx_se = max(weekly["coef"].std(ddof=1), 1e-6) / 3
-    weekly["se"] = approx_se
-    return weekly[["event_time", "coef", "se"]]
+    for t in sorted(event_df["event_time"].unique()):
+        if t == -1:
+            rows.append({"event_time": t, "coef": 0.0, "se": 0.0})
+            continue
+
+        term = f'C(event_time_cat, Treatment(reference="-1"))[T.{t}]:treatment_flag'
+
+        if term in model.params.index:
+            rows.append(
+                {
+                    "event_time": t,
+                    "coef": float(model.params[term]),
+                    "se": float(model.bse[term]),
+                }
+            )
+
+    out = pd.DataFrame(rows).sort_values("event_time").reset_index(drop=True)
+    return out
 
 
 @st.cache_data
@@ -254,7 +279,7 @@ elif section == "ATE":
 # ============================================================
 
 elif section == "Event Study":
-    st.header("Event Study / Dynamic Treatment Effects")
+    st.header("Event Study")
 
     fig, ax = plt.subplots(figsize=(7, 3.8))
     ax.errorbar(
@@ -262,21 +287,23 @@ elif section == "Event Study":
         event_df["coef"],
         yerr=1.96 * event_df["se"],
         fmt="o",
-        capsize=4,
+        capsize=4
     )
     ax.axhline(0, linestyle="--")
     ax.axvline(-1, linestyle="--")
     ax.set_xlabel("Week (Event Time)")
     ax.set_ylabel("Estimated Effect")
-    ax.set_title("Event Study: Relative Weekly Effects")
+    ax.set_title("Event Study: Dynamic Treatment Effects (Two-Way Fixed Effects)")
     plt.tight_layout()
     st.pyplot(fig, width="stretch")
 
-    st.write(
-        "Event-study diagnostics show that treated users exhibited higher pre-treatment trends, "
-        "indicating a violation of the parallel trends assumption. As a result, panel-based DiD estimates "
-        "should be interpreted as robustness checks rather than definitive causal estimates."
-    )
+    st.write("""
+    The event study estimates week-by-week treatment effects relative to the final pre-treatment period (week -1), while controlling for both user and time fixed effects.
+
+    The pre-treatment coefficients (weeks -6 to -2) are positive and in several cases statistically significant. This suggests that treated users exhibited higher revenue even before the treatment was applied, indicating a violation of the parallel trends assumption.
+
+    As a result, panel-based DiD estimates should be interpreted as robustness checks rather than primary causal estimates. The randomized A/B test provides the most credible estimate of causal impact in this setting.
+    """)
 
 # ============================================================
 # Model Comparison
