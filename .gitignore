@@ -5,9 +5,10 @@
 # Ignore raw data
 data/raw/
 
-# Ignore processed data EXCEPT the main app dataset
+# Ignore processed data EXCEPT app datasets
 data/processed/*
 !data/processed/panel_df.csv
+!data/processed/event_study.csv
 
 
 # =========================
