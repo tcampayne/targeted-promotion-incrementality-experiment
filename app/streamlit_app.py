@@ -94,50 +94,7 @@ def compute_model_table() -> pd.DataFrame:
     return results
 
 
-@st.cache_data
-def compute_event_study_series(df: pd.DataFrame) -> pd.DataFrame:
-    import statsmodels.formula.api as smf
 
-    event_df = df.copy()
-
-    # Make sure event_time exists and is integer
-    event_df["event_time"] = event_df["event_time"].astype(int)
-
-    # Use week -1 as the omitted reference period
-    event_df["event_time_cat"] = event_df["event_time"].astype(str)
-    event_df["event_time_cat"] = pd.Categorical(
-        event_df["event_time_cat"],
-        categories=[str(x) for x in sorted(event_df["event_time"].unique())],
-        ordered=True
-    )
-
-    # TWFE event study:
-    # revenue ~ event-time x treatment interactions + user FE + week FE
-    model = smf.ols(
-        'revenue_sim ~ C(event_time_cat, Treatment(reference="-1")):treatment_flag + C(user_id) + C(week_index)',
-        data=event_df
-    ).fit(cov_type="cluster", cov_kwds={"groups": event_df["user_id"]})
-
-    rows = []
-
-    for t in sorted(event_df["event_time"].unique()):
-        if t == -1:
-            rows.append({"event_time": t, "coef": 0.0, "se": 0.0})
-            continue
-
-        term = f'C(event_time_cat, Treatment(reference="-1"))[T.{t}]:treatment_flag'
-
-        if term in model.params.index:
-            rows.append(
-                {
-                    "event_time": t,
-                    "coef": float(model.params[term]),
-                    "se": float(model.bse[term]),
-                }
-            )
-
-    out = pd.DataFrame(rows).sort_values("event_time").reset_index(drop=True)
-    return out
 
 
 @st.cache_data

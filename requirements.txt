@@ -3,4 +3,4 @@ pandas
 numpy
 matplotlib
 scikit-learn
-statsmodels
+statsmodels>=0.14
