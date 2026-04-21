@@ -5,6 +5,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+csv_path = BASE_DIR.parent / "data" / "processed" / "panel_df.csv"
+
+panel_df = pd.read_csv(csv_path)
 
 st.set_page_config(page_title="A/B Promo Incrementality", layout="wide")
 
@@ -176,9 +182,6 @@ def compute_quartile_hte(df: pd.DataFrame) -> pd.DataFrame:
 
 st.sidebar.title("A/B Promo Incrementality")
 
-default_path = "data/processed/panel_df.csv"
-file_path = st.sidebar.text_input("CSV path", value=default_path)
-
 st.sidebar.markdown("### App sections")
 section = st.sidebar.radio(
     "Go to",
@@ -199,21 +202,21 @@ section = st.sidebar.radio(
 st.title("10% Discount Incrementality Analysis")
 st.caption("Streamlit dashboard for the high-LTV discount causal inference project")
 
-if not Path(file_path).exists():
-    st.warning(
-        f"Could not find `{file_path}`. Export your analysis dataset to CSV first, then rerun the app."
+if not csv_path.exists():
+    st.error(
+        f"Could not find `{csv_path}`. Export your analysis dataset to CSV first, then rerun the app."
     )
     st.stop()
 
 try:
-    panel_df = load_panel_data(file_path)
+    panel_df = load_panel_data(str(csv_path))
 except Exception as e:
     st.error(f"Failed to load panel data: {e}")
     st.stop()
 
 ate = compute_post_ate(panel_df)
 model_table = compute_model_table()
-event_df = compute_event_study_series(panel_df)
+event_df = pd.read_csv(BASE_DIR.parent / "data" / "processed" / "event_study.csv")
 hte_df = compute_quartile_hte(panel_df)
 
 # Business impact based on experimental ATE
