@@ -1,7 +1,7 @@
 👋 Hi, I'm Tristen Campayne  
 Product Analytics | Experimentation | SQL | Causal Inference  
 
-[LinkedIn](https://www.linkedin.com/in/tristen-campayne/) | [Tableau](https://public.tableau.com/app/profile/tristen.campayne) | Email: tcampayne@gmail.com  
+[LinkedIn](https://www.linkedin.com/in/tristen-campayne/) | [Tableau](https://public.tableau.com/app/profile/tristen.campayne) | tcampayne@gmail.com  
 
 ---
 
