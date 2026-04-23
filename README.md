@@ -1,130 +1,176 @@
-👋 Hi, I'm Tristen Campayne  
-Product Analytics | Experimentation | SQL | Causal Inference  
+# 🧪 A/B Promotion Incrementality Analysis
 
-[LinkedIn](https://www.linkedin.com/in/tristen-campayne/) | [Tableau](https://public.tableau.com/app/profile/tristen.campayne) | tcampayne@gmail.com  
+## 📌 Overview
 
----
+This project evaluates whether offering a **10% discount to high-LTV users** generates **true incremental revenue** or primarily subsidizes existing purchasing behavior.
 
-## 🚀 About Me
-I’m a data analyst focused on experimentation, product analytics, and SQL pipelines.
-
-I build end-to-end projects that:
-- Estimate causal impact and clearly communicate assumptions and limitations  
-- Translate data into actionable product decisions  
-- Quantify revenue and user behavior outcomes  
+The analysis combines **randomized A/B testing**, **panel methods**, and **causal inference techniques** to assess both **average impact** and **model sensitivity**.
 
 ---
 
-## 📌 Featured Work
+## ❓ Business Question
 
-### 🧪 A/B Promotion Incrementality Analysis  
-👉 **[View Project Repo](https://github.com/tcampayne/targeted-promotion-incrementality-experiment)**  
-
-**Business Question:**  
-Does offering a 10% discount to high-LTV users drive incremental revenue, or primarily subsidize existing behavior?
+> Does a 10% discount drive incremental revenue, or does it reduce margin by discounting purchases that would have occurred anyway?
 
 ---
 
-### **Result (TL;DR):**
-- +$8.50 incremental revenue per user (95% CI: [7.83, 9.16])  
-- -$2.99 net impact per user after discount cost  
+## 📊 Key Results
 
-**Conclusion:**  
-While the promotion increases revenue, it is not profitable at a 10% blanket discount level. Results suggest value in more targeted discounting strategies rather than broad rollout.
+- **+$8.50 incremental revenue per user**  
+- **95% CI:** [7.83, 9.16]  
+- **-$2.99 net impact per user** after discount cost  
 
----
+### ✅ Conclusion
 
-### **How I Approached It:**
-- Designed randomized experiment across ~61.9K users  
-- Built SQL pipeline (staging → core → marts) for experiment-ready data  
-- Evaluated treatment/control balance and diagnosed pre-treatment differences using event-study analysis  
+While the promotion increases revenue, it is **not profitable** at a 10% blanket discount level.
 
----
-
-### **Causal Methods:**
-- Difference-in-Differences  
-- Event Study Analysis  
-- Two-Way Fixed Effects Regression (user + time)  
-- Cluster-robust standard errors  
-- Diagnosed violations of the parallel trends assumption via event study  
+This suggests:
+- Value in **targeted discounting**
+- Risk of **subsidizing existing behavior**
 
 ---
 
-### **Deep Dive:**
-- Identified heterogeneous treatment effects using causal forests (EconML)  
-- Observed larger absolute lift among higher baseline spend users  
-- Highlighted limitations of blanket promotions and informed targeting strategy  
+## 🚀 Interactive App
+
+👉 **Live Streamlit App:**  
+https://targeted-promotion-incrementality-experiment-ltfx4qbfgnsn5ey2x.streamlit.app  
+
+The app includes:
+- A/B test results with confidence intervals  
+- Event study (TWFE) visualization  
+- Model comparison (Naive, FE, TWFE, Weighted DiD)  
+- Business impact breakdown  
+- Heterogeneous treatment effects  
 
 ---
 
-### **Tools:**
-SQL, Python, Pandas, EconML, Streamlit  
+## 🧠 Experimental Design
+
+- Randomized controlled experiment  
+- ~61.9K users  
+- Treatment: 10% discount  
+- Control: no discount  
+- Multi-week panel dataset  
 
 ---
 
-## 📊 FP&A Profitability & Competitive Trends Dashboard  
-👉 **[View Dashboard / Repo](https://github.com/tcampayne/fpa-profitability-market-trends-dashboard)**   
+## 🏗️ Data Pipeline
 
-### **What I Built:**
-- SQL analytics mart with 20 years of data across 500+ companies  
-- Standardized KPIs for cross-industry benchmarking  
-- Executive-level Tableau dashboard with drill-down views  
+Built a reproducible SQL pipeline:
+staging → core → marts
 
----
-
-### **Impact:**
-- Improved forecast accuracy by 30%  
-- Reduced KPI refresh time by 40%  
+- Cleaned and structured raw event data  
+- Created user-level and panel-level datasets  
+- Ensured experiment-ready schema for analysis  
 
 ---
 
-### **Modeling:**
-- OLS regression to quantify impact of R&D and ad spend on growth  
+## 🔬 Methodology
+
+### 1. A/B Test (Primary Estimate)
+- Post-period difference in means  
+- Interpreted as **Average Treatment Effect (ATE)**  
 
 ---
 
-### **Tools:**
-SQL, Tableau, Excel  
+### 2. Difference-in-Differences
+
+Estimated treatment effects using:
+
+- Naive DiD  
+- User fixed effects  
+- Two-way fixed effects (user + time)  
 
 ---
 
-## 🧠 Core Skills
+### 3. Event Study Analysis
 
-### **Experimentation & Analytics**
-- A/B Testing, Causal Inference  
-- Difference-in-Differences, Panel Regression, Event Studies  
+- Estimated dynamic treatment effects over time  
+- Used to validate the **parallel trends assumption**  
 
-### **Languages & Tools**
-- SQL, Python, R  
-- Pandas, EconML, scikit-learn  
-
-### **Data & BI**
-- Tableau, Power BI  
-- dbt, BigQuery, Databricks  
+### ⚠️ Finding:
+Pre-treatment trends differ between treatment and control groups, indicating a **violation of parallel trends**.
 
 ---
 
-## ⚡ What I Focus On
-- Designing A/B experiments to measure product impact  
-- Building scalable SQL data models  
-- Creating decision-focused dashboards  
-- Applying causal inference to real business problems  
+### 4. Weighted DiD (Robustness Check)
+
+- Applied reweighting to improve comparability  
+- Adjusts for observable differences between groups  
+
+**Note:** Improves balance but does not fully resolve violations of parallel trends.
 
 ---
 
-## 🎯 Current Focus
-- Product analytics roles (tech / high-growth companies)  
-- Experimentation and causal inference  
-- Analytics engineering workflows  
+### 5. Heterogeneous Treatment Effects
+
+- Implemented **causal forests (EconML)**  
+- Estimated user-level treatment effects  
+
+### Finding:
+Users with higher baseline spend show **larger absolute revenue lift**, suggesting potential for targeted discount strategies.
 
 ---
 
-## 📫 Connect With Me
-- LinkedIn: https://www.linkedin.com/in/tristen-campayne/  
-- Tableau Public: https://public.tableau.com/app/profile/tristen.campayne  
-- GitHub: https://github.com/tcampayne/  
-- Email: tcampayne@gmail.com  
+## ⚠️ Limitations
+
+- **Parallel trends assumption violated**, weakening DiD interpretation  
+- Revenue is simulated (not real transaction data)  
+- Discount cost model is simplified  
+- Results are sensitive to modeling assumptions  
 
 ---
 
-⭐️ Open to product analytics and experimentation-focused roles
+## 💡 Design Improvements
+
+Future experiments could be strengthened by:
+
+- **Stratified randomization** (e.g., by baseline spend / LTV)  
+- More granular user segmentation  
+- Longer pre-treatment observation windows  
+
+---
+
+## 🔄 Analysis Workflow
+Raw Data → SQL Pipeline → Panel Dataset → A/B Test → DiD Models → Event Study → HTE → Business Decision
+---
+
+## 🛠️ Tools & Technologies
+
+- SQL (data pipeline)  
+- Python (analysis)  
+- Pandas, NumPy  
+- Statsmodels (regression)  
+- EconML (causal forests)  
+- Streamlit (interactive app)  
+
+---
+
+## 📂 Repo Structure
+data/
+raw/
+processed/
+
+sql/
+staging/
+core/
+marts/
+
+analysis/
+notebooks/
+
+app/
+streamlit_app.py
+
+---
+
+## 🎯 Key Takeaways
+
+- Positive revenue lift does **not imply profitability**  
+- Randomized ATE is the most reliable estimate  
+- DiD estimates depend on assumptions and specification  
+- Parallel trends violations must be explicitly diagnosed  
+- Targeting is critical for promotion effectiveness  
+- Experimental design is as important as modeling  
+
+---
