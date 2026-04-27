@@ -269,8 +269,8 @@ if section == "Overview":
     st.markdown("### Executive Takeaway")
     st.write(
         "The randomized A/B test indicates a positive revenue lift. The cumulative post-period "
-        f"ATE is approximately ${cumulative_ate['coef']:.2f} per user, while the average weekly "
-        f"post-period lift is approximately ${weekly_ate['coef']:.2f}. However, once discount cost "
+        f"ATE is approximately {cumulative_ate['coef']:.2f} dollars per user, while the average weekly "
+        f"post-period lift is approximately {weekly_ate['coef']:.2f} dollars. However, once discount cost "
         "is included, the average lift remains smaller than the cost of a blanket 10% offer. "
         "Profitability would likely require either a lower discount, more effective targeting, or "
         "a strategic context where short-term losses are acceptable."
@@ -351,7 +351,7 @@ elif section == "Event Study":
     sensitive to which pre-treatment week is used as the baseline.
 
     As a result, the event study suggests caution when interpreting panel-based DiD estimates, but it
-    should not be read as definitive evidence of a severe parallel trends violation. The randomized A/B
+    should not be read as definitive evidence of a meaningful parallel trends violation. The randomized A/B
     test remains the primary causal estimate.
     """)
 
@@ -381,6 +381,9 @@ elif section == "Model Comparison":
     The weighted DiD model improves comparability on observed characteristics, while the synthetic
     control check constructs a better-matched control trajectory. However, neither replaces the
     randomized post-period ATE, which remains the most reliable estimate of average causal impact.
+
+    This instability reinforces the importance of randomized experimental estimates, which do not
+    rely on parallel trends assumptions.
     """)
 
 # ============================================================
@@ -421,9 +424,9 @@ elif section == "Synthetic Control":
         plt.tight_layout()
         st.pyplot(fig, width="stretch")
     else:
-        st.info(
-            "Synthetic-control plot data was not found. Add "
-            "`data/processed/synthetic_control.csv` to display the robustness plots."
+        st.write(
+            "Synthetic-control plot data is not included in this deployed view, but the final "
+            "notebook reports the synthetic-control effect and pre-period fit diagnostics below."
         )
 
     st.write("""
@@ -485,7 +488,7 @@ elif section == "HTE":
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mean TE", "$8.40")
     c2.metric("Std Dev", "$5.57")
-    c3.metric("Min TE", "$-13.73")
+    c3.metric("Min TE", "-$13.73")
     c4.metric("Max TE", "$46.33")
 
     st.write("""
@@ -496,8 +499,9 @@ elif section == "HTE":
     revenue — rather than stronger causal responsiveness — drives much of the larger dollar impact.
 
     The causal forest estimates reveal meaningful variation in predicted treatment effects across
-    users, with a mean estimated effect of $8.40, standard deviation of $5.57, minimum of -$13.73,
-    and maximum of $46.33.
+    users, with a mean estimated effect of 8.40 dollars, standard deviation of 5.57 dollars, minimum
+    of -13.73 dollars, and maximum of 46.33 dollars. Notably, some users exhibit negative predicted
+    treatment effects, suggesting the discount may reduce net revenue for a subset of users.
 
     Because these estimates rely on model assumptions and observed covariates, they should be
     interpreted as exploratory evidence of potential heterogeneity rather than a validated targeting
