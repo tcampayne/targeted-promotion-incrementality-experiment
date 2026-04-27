@@ -147,6 +147,101 @@ def load_synthetic_control(path: str) -> pd.DataFrame | None:
 
 
 @st.cache_data
+def compute_synthetic_control(df: pd.DataFrame) -> pd.DataFrame:
+    """Lightweight synthetic-control robustness check using baseline-spend donor cohorts.
+
+    This recreates the notebook robustness check when the precomputed synthetic_control.csv
+    is not present in the deployed app. It is intentionally aggregate/cohort-level, not a
+    replacement for the randomized A/B estimate.
+    """
+    from scipy.optimize import minimize
+
+    sc_df = df[["user_id", "treatment_flag", "event_time", "revenue_sim", "post"]].copy()
+
+    baseline = (
+        sc_df[sc_df["post"] == 0]
+        .groupby("user_id", as_index=False)["revenue_sim"]
+        .mean()
+        .rename(columns={"revenue_sim": "baseline_revenue"})
+    )
+    sc_df = sc_df.merge(baseline, on="user_id", how="left")
+
+    control_users = (
+        sc_df[sc_df["treatment_flag"] == 0][["user_id", "baseline_revenue"]]
+        .drop_duplicates()
+        .dropna(subset=["baseline_revenue"])
+    )
+    control_users["donor_bin"] = pd.qcut(
+        control_users["baseline_revenue"],
+        q=10,
+        labels=False,
+        duplicates="drop",
+    )
+
+    sc_df = sc_df.merge(control_users[["user_id", "donor_bin"]], on="user_id", how="left")
+
+    treated_series = (
+        sc_df[sc_df["treatment_flag"] == 1]
+        .groupby("event_time")["revenue_sim"]
+        .mean()
+        .sort_index()
+    )
+
+    donor_panel = (
+        sc_df[sc_df["treatment_flag"] == 0]
+        .dropna(subset=["donor_bin"])
+        .groupby(["event_time", "donor_bin"])["revenue_sim"]
+        .mean()
+        .unstack()
+        .sort_index()
+    )
+
+    common_times = treated_series.index.intersection(donor_panel.index)
+    treated_series = treated_series.loc[common_times]
+    donor_panel = donor_panel.loc[common_times]
+
+    pre_periods = treated_series.index[treated_series.index < 0]
+    if len(pre_periods) == 0 or donor_panel.empty:
+        raise ValueError("Synthetic control requires pre-treatment periods and control donor cohorts.")
+
+    # Keep donor cohorts with complete pre-period observations.
+    donor_panel = donor_panel.dropna(axis=1, subset=pre_periods)
+    if donor_panel.empty:
+        raise ValueError("No donor cohorts have complete pre-period observations.")
+
+    y_treated_pre = treated_series.loc[pre_periods].values
+    y_donors_pre = donor_panel.loc[pre_periods].values
+    n_donors = y_donors_pre.shape[1]
+
+    def objective(w: np.ndarray) -> float:
+        synthetic_pre = y_donors_pre @ w
+        return float(np.mean((y_treated_pre - synthetic_pre) ** 2))
+
+    constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
+    bounds = [(0, 1)] * n_donors
+    initial_weights = np.ones(n_donors) / n_donors
+
+    result = minimize(objective, initial_weights, bounds=bounds, constraints=constraints, method="SLSQP")
+    weights = result.x if result.success else initial_weights
+
+    synthetic_series = pd.Series(
+        donor_panel.values @ weights,
+        index=donor_panel.index,
+        name="synthetic_control",
+    )
+    effect_series = treated_series.loc[synthetic_series.index] - synthetic_series
+
+    return pd.DataFrame(
+        {
+            "event_time": synthetic_series.index,
+            "treated": treated_series.loc[synthetic_series.index].values,
+            "synthetic_control": synthetic_series.values,
+            "effect": effect_series.values,
+        }
+    ).reset_index(drop=True)
+
+
+@st.cache_data
 def compute_quartile_hte(df: pd.DataFrame) -> pd.DataFrame:
     user_pre = (
         df[df["post"] == 0]
@@ -201,12 +296,15 @@ try:
     panel_df = load_panel_data(str(PANEL_CSV))
     event_df = load_event_study(str(EVENT_CSV))
     synthetic_df = load_synthetic_control(str(SYNTHETIC_CSV))
+    if synthetic_df is None:
+        synthetic_df = compute_synthetic_control(panel_df)
 except Exception as e:
     st.error(f"Failed to load app data: {e}")
     st.stop()
 
 weekly_ate = compute_weekly_post_ate(panel_df)
 cumulative_ate = compute_cumulative_post_ate(panel_df)
+analysis_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
 model_table = compute_model_table()
 hte_df = compute_quartile_hte(panel_df)
 
@@ -261,7 +359,7 @@ section = st.sidebar.radio(
 
 if section == "Overview":
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Users", f"{panel_df['user_id'].nunique():,}")
+    c1.metric("Users", f"{analysis_users:,}")
     c2.metric("Avg Weekly ATE", f"${weekly_ate['coef']:.2f}")
     c3.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
     c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
