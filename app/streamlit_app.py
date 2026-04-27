@@ -365,10 +365,10 @@ if section == "Overview":
     c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
 
     st.markdown("### Executive Takeaway")
-    st.write(
+    st.markdown(
         "The randomized A/B test indicates a positive revenue lift. The cumulative post-period "
-        f"ATE is approximately {cumulative_ate['coef']:.2f} dollars per user, while the average weekly "
-        f"post-period lift is approximately {weekly_ate['coef']:.2f} dollars. However, once discount cost "
+        f"ATE is approximately \${cumulative_ate['coef']:.2f} per user, while the average weekly "
+        f"post-period lift is approximately \${weekly_ate['coef']:.2f}. However, once discount cost "
         "is included, the average lift remains smaller than the cost of a blanket 10% offer. "
         "Profitability would likely require either a lower discount, more effective targeting, or "
         "a strategic context where short-term losses are acceptable."
@@ -496,6 +496,11 @@ elif section == "Synthetic Control":
     c2.metric("Pre-Period Fit RMSE", f"{synthetic_rmse:.2f}")
 
     if synthetic_df is not None:
+        st.write(
+            "The first chart shows how well the synthetic control matches the treated group before "
+            "treatment, while the second chart shows the estimated treatment effect over time."
+        )
+
         fig, ax = plt.subplots(figsize=(7, 3.8))
         ax.plot(synthetic_df["event_time"], synthetic_df["treated"], marker="o", label="Treated")
         ax.plot(
@@ -505,7 +510,7 @@ elif section == "Synthetic Control":
             label="Synthetic Control",
         )
         ax.axvline(-1, linestyle="--")
-        ax.set_title("Treated vs Synthetic Control")
+        ax.set_title("Treated vs Synthetic Control (Pre-Fit Check)")
         ax.set_xlabel("Event Time")
         ax.set_ylabel("Average Revenue")
         ax.legend()
@@ -516,7 +521,7 @@ elif section == "Synthetic Control":
         ax.plot(synthetic_df["event_time"], synthetic_df["effect"], marker="o")
         ax.axhline(0, linestyle="--")
         ax.axvline(-1, linestyle="--")
-        ax.set_title("Treated minus Synthetic Control Over Time")
+        ax.set_title("Treated minus Synthetic Control (Estimated Effect)")
         ax.set_xlabel("Event Time")
         ax.set_ylabel("Revenue Difference")
         plt.tight_layout()
@@ -527,15 +532,16 @@ elif section == "Synthetic Control":
             "notebook reports the synthetic-control effect and pre-period fit diagnostics below."
         )
 
-    st.write("""
+    st.markdown("""
     The synthetic control robustness check constructs a weighted combination of control cohorts that
     more closely matches the treated group's pre-treatment revenue trajectory.
 
-    In the final notebook, the synthetic-control estimate is approximately +$2.11 per user, with a
+    In the final notebook, the synthetic-control estimate is approximately +\$2.11 per user, with a
     pre-period fit RMSE of 2.38. This smaller estimate highlights sensitivity to how the
     counterfactual is constructed.
 
-    This result is best interpreted as a robustness check rather than the primary causal estimate.
+    A strong pre-period fit supports the synthetic control as a useful counterfactual, but this result
+    is best interpreted as a robustness check rather than the primary causal estimate.
     """)
 
 # ============================================================
@@ -589,7 +595,7 @@ elif section == "HTE":
     c3.metric("Min TE", "-$13.73")
     c4.metric("Max TE", "$46.33")
 
-    st.write("""
+    st.markdown("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating
     larger absolute revenue gains.
 
@@ -597,8 +603,8 @@ elif section == "HTE":
     revenue — rather than stronger causal responsiveness — drives much of the larger dollar impact.
 
     The causal forest estimates reveal meaningful variation in predicted treatment effects across
-    users, with a mean estimated effect of 8.40 dollars, standard deviation of 5.57 dollars, minimum
-    of -13.73 dollars, and maximum of 46.33 dollars. Notably, some users exhibit negative predicted
+    users, with a mean estimated effect of \$8.40, standard deviation of \$5.57, minimum
+    of -\$13.73, and maximum of \$46.33. Notably, some users exhibit negative predicted
     treatment effects, suggesting the discount may reduce net revenue for a subset of users.
 
     Because these estimates rely on model assumptions and observed covariates, they should be
