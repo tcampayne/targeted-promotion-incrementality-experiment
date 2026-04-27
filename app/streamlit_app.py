@@ -146,30 +146,30 @@ def load_synthetic_control(path: str) -> pd.DataFrame | None:
     return synth_df.sort_values("event_time").reset_index(drop=True)
 
 
-@st.cache_data
-def compute_synthetic_control(df: pd.DataFrame) -> pd.DataFrame:
-    """Lightweight synthetic-control robustness check using baseline-spend donor cohorts.
 
-    This recreates the notebook robustness check when the precomputed synthetic_control.csv
-    is not present in the deployed app. It is intentionally aggregate/cohort-level, not a
-    replacement for the randomized A/B estimate.
+
+@st.cache_data
+def compute_synthetic_control_from_panel(df: pd.DataFrame) -> pd.DataFrame:
+    """Recompute the synthetic-control series using the same notebook logic.
+
+    This avoids stale CSV mismatches and keeps Streamlit visuals aligned with the final notebook.
     """
     from scipy.optimize import minimize
 
-    sc_df = df[["user_id", "treatment_flag", "event_time", "revenue_sim", "post"]].copy()
+    sc_df = df[["user_id", "treatment_flag", "event_time", "revenue_sim"]].copy()
 
     baseline = (
-        sc_df[sc_df["post"] == 0]
-        .groupby("user_id", as_index=False)["revenue_sim"]
+        sc_df[sc_df["event_time"] < 0]
+        .groupby("user_id")["revenue_sim"]
         .mean()
-        .rename(columns={"revenue_sim": "baseline_revenue"})
+        .reset_index(name="baseline_revenue")
     )
     sc_df = sc_df.merge(baseline, on="user_id", how="left")
 
     control_users = (
         sc_df[sc_df["treatment_flag"] == 0][["user_id", "baseline_revenue"]]
         .drop_duplicates()
-        .dropna(subset=["baseline_revenue"])
+        .copy()
     )
     control_users["donor_bin"] = pd.qcut(
         control_users["baseline_revenue"],
@@ -177,7 +177,6 @@ def compute_synthetic_control(df: pd.DataFrame) -> pd.DataFrame:
         labels=False,
         duplicates="drop",
     )
-
     sc_df = sc_df.merge(control_users[["user_id", "donor_bin"]], on="user_id", how="left")
 
     treated_series = (
@@ -189,7 +188,6 @@ def compute_synthetic_control(df: pd.DataFrame) -> pd.DataFrame:
 
     donor_panel = (
         sc_df[sc_df["treatment_flag"] == 0]
-        .dropna(subset=["donor_bin"])
         .groupby(["event_time", "donor_bin"])["revenue_sim"]
         .mean()
         .unstack()
@@ -201,44 +199,43 @@ def compute_synthetic_control(df: pd.DataFrame) -> pd.DataFrame:
     donor_panel = donor_panel.loc[common_times]
 
     pre_periods = treated_series.index[treated_series.index < 0]
-    if len(pre_periods) == 0 or donor_panel.empty:
-        raise ValueError("Synthetic control requires pre-treatment periods and control donor cohorts.")
-
-    # Keep donor cohorts with complete pre-period observations.
-    donor_panel = donor_panel.dropna(axis=1, subset=pre_periods)
-    if donor_panel.empty:
-        raise ValueError("No donor cohorts have complete pre-period observations.")
-
     y_treated_pre = treated_series.loc[pre_periods].values
     y_donors_pre = donor_panel.loc[pre_periods].values
+
     n_donors = y_donors_pre.shape[1]
 
-    def objective(w: np.ndarray) -> float:
+    def objective(w):
         synthetic_pre = y_donors_pre @ w
-        return float(np.mean((y_treated_pre - synthetic_pre) ** 2))
+        return np.mean((y_treated_pre - synthetic_pre) ** 2)
 
     constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
     bounds = [(0, 1)] * n_donors
     initial_weights = np.ones(n_donors) / n_donors
 
-    result = minimize(objective, initial_weights, bounds=bounds, constraints=constraints, method="SLSQP")
-    weights = result.x if result.success else initial_weights
+    result = minimize(
+        objective,
+        initial_weights,
+        bounds=bounds,
+        constraints=constraints,
+        method="SLSQP",
+    )
 
+    weights = result.x
     synthetic_series = pd.Series(
         donor_panel.values @ weights,
         index=donor_panel.index,
         name="synthetic_control",
     )
-    effect_series = treated_series.loc[synthetic_series.index] - synthetic_series
+    effect_series = treated_series - synthetic_series
 
     return pd.DataFrame(
         {
-            "event_time": synthetic_series.index,
-            "treated": treated_series.loc[synthetic_series.index].values,
+            "event_time": treated_series.index,
+            "treated": treated_series.values,
             "synthetic_control": synthetic_series.values,
             "effect": effect_series.values,
         }
-    ).reset_index(drop=True)
+    ).sort_values("event_time").reset_index(drop=True)
 
 
 @st.cache_data
@@ -295,16 +292,14 @@ if not EVENT_CSV.exists():
 try:
     panel_df = load_panel_data(str(PANEL_CSV))
     event_df = load_event_study(str(EVENT_CSV))
-    synthetic_df = load_synthetic_control(str(SYNTHETIC_CSV))
-    if synthetic_df is None:
-        synthetic_df = compute_synthetic_control(panel_df)
+    # Recompute synthetic-control visuals from panel data so the app matches the final notebook.
+    synthetic_df = compute_synthetic_control_from_panel(panel_df)
 except Exception as e:
     st.error(f"Failed to load app data: {e}")
     st.stop()
 
 weekly_ate = compute_weekly_post_ate(panel_df)
 cumulative_ate = compute_cumulative_post_ate(panel_df)
-analysis_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
 model_table = compute_model_table()
 hte_df = compute_quartile_hte(panel_df)
 
@@ -359,16 +354,16 @@ section = st.sidebar.radio(
 
 if section == "Overview":
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Users", f"{analysis_users:,}")
+    c1.metric("Users", f"{panel_df['user_id'].nunique():,}")
     c2.metric("Avg Weekly ATE", f"${weekly_ate['coef']:.2f}")
     c3.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
     c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
 
     st.markdown("### Executive Takeaway")
-    st.markdown(
+    st.write(
         "The randomized A/B test indicates a positive revenue lift. The cumulative post-period "
-        f"ATE is approximately \${cumulative_ate['coef']:.2f} per user, while the average weekly "
-        f"post-period lift is approximately \${weekly_ate['coef']:.2f}. However, once discount cost "
+        f"ATE is approximately ${cumulative_ate['coef']:.2f} per user, while the average weekly "
+        f"post-period lift is approximately ${weekly_ate['coef']:.2f}. However, once discount cost "
         "is included, the average lift remains smaller than the cost of a blanket 10% offer. "
         "Profitability would likely require either a lower discount, more effective targeting, or "
         "a strategic context where short-term losses are acceptable."
@@ -479,9 +474,6 @@ elif section == "Model Comparison":
     The weighted DiD model improves comparability on observed characteristics, while the synthetic
     control check constructs a better-matched control trajectory. However, neither replaces the
     randomized post-period ATE, which remains the most reliable estimate of average causal impact.
-
-    This instability reinforces the importance of randomized experimental estimates, which do not
-    rely on parallel trends assumptions.
     """)
 
 # ============================================================
@@ -495,82 +487,58 @@ elif section == "Synthetic Control":
     c1.metric("Synthetic-Control Effect", f"${synthetic_effect:.2f}")
     c2.metric("Pre-Period Fit RMSE", f"{synthetic_rmse:.2f}")
 
-    if synthetic_df is not None:
-        st.write(
-            "The first chart shows how well the synthetic control matches the treated group before "
-            "treatment, while the second chart shows the estimated treatment effect over time."
-        )
+    st.write(
+        "The first chart checks how closely the synthetic control tracks the treated group before "
+        "the treatment starts. The second chart shows the estimated treatment effect over time."
+    )
 
-        # Chart 1: pre-fit check (levels)
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(
-            synthetic_df["event_time"],
-            synthetic_df["treated"],
-            marker="o",
-            label="Treated",
-        )
-        ax.plot(
-            synthetic_df["event_time"],
-            synthetic_df["synthetic_control"],
-            marker="o",
-            label="Synthetic Control",
-        )
-        ax.axvline(
-            -1,
-            linestyle="--",
-            alpha=0.6,
-            label="Treatment Start (t = -1)",
-        )
-        ax.set_title("Synthetic Control Robustness Check")
-        ax.set_xlabel("Event Time")
-        ax.set_ylabel("Average Revenue")
-        ax.grid(alpha=0.2)
-        ax.legend()
-        plt.tight_layout()
-        st.pyplot(fig, width="content")
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(
+        synthetic_df["event_time"],
+        synthetic_df["treated"],
+        marker="o",
+        label="Treated",
+    )
+    ax.plot(
+        synthetic_df["event_time"],
+        synthetic_df["synthetic_control"],
+        marker="o",
+        label="Synthetic Control",
+    )
+    ax.axvline(-1, linestyle="--", alpha=0.6, label="Treatment Start (t = -1)")
+    ax.set_title("Synthetic Control Robustness Check")
+    ax.set_xlabel("Event Time")
+    ax.set_ylabel("Average Revenue")
+    ax.grid(alpha=0.2)
+    ax.legend()
+    plt.tight_layout()
+    st.pyplot(fig, width="content")
 
-        # Chart 2: estimated effect over time
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(
-            synthetic_df["event_time"],
-            synthetic_df["effect"],
-            marker="o",
-        )
-        ax.axhline(
-            0,
-            linestyle="--",
-            alpha=0.35,
-            label="Zero Effect (Baseline)",
-        )
-        ax.axvline(
-            -1,
-            linestyle="--",
-            alpha=0.6,
-            label="Treatment Start (t = -1)",
-        )
-        ax.set_title("Treated minus Synthetic Control Over Time")
-        ax.set_xlabel("Event Time")
-        ax.set_ylabel("Revenue Difference")
-        ax.grid(alpha=0.2)
-        ax.legend()
-        plt.tight_layout()
-        st.pyplot(fig, width="content")
-    else:
-        st.write(
-            "Synthetic-control plot data is not included in this deployed view, but the final "
-            "notebook reports the synthetic-control effect and pre-period fit diagnostics below."
-        )
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(
+        synthetic_df["event_time"],
+        synthetic_df["effect"],
+        marker="o",
+    )
+    ax.axhline(0, linestyle="--", alpha=0.35, label="Zero Effect (Baseline)")
+    ax.axvline(-1, linestyle="--", alpha=0.6, label="Treatment Start (t = -1)")
+    ax.set_title("Treated minus Synthetic Control Over Time")
+    ax.set_xlabel("Event Time")
+    ax.set_ylabel("Revenue Difference")
+    ax.grid(alpha=0.2)
+    ax.legend()
+    plt.tight_layout()
+    st.pyplot(fig, width="content")
 
-    st.markdown("""
+    st.write("""
     The synthetic control robustness check constructs a weighted combination of control cohorts that
     more closely matches the treated group's pre-treatment revenue trajectory.
 
-    In the final notebook, the synthetic-control estimate is approximately +\$2.11 per user, with a
+    In the final notebook, the synthetic-control estimate is approximately +$2.11 per user, with a
     pre-period fit RMSE of 2.38. This smaller estimate highlights sensitivity to how the
     counterfactual is constructed.
 
-    A strong pre-period fit supports the synthetic control as a useful counterfactual, but this result
-    is best interpreted as a robustness check rather than the primary causal estimate.
+    This result is best interpreted as a robustness check rather than the primary causal estimate.
     """)
 
 # ============================================================
@@ -621,10 +589,10 @@ elif section == "HTE":
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mean TE", "$8.40")
     c2.metric("Std Dev", "$5.57")
-    c3.metric("Min TE", "-$13.73")
+    c3.metric("Min TE", "$-13.73")
     c4.metric("Max TE", "$46.33")
 
-    st.markdown("""
+    st.write("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating
     larger absolute revenue gains.
 
@@ -632,9 +600,8 @@ elif section == "HTE":
     revenue — rather than stronger causal responsiveness — drives much of the larger dollar impact.
 
     The causal forest estimates reveal meaningful variation in predicted treatment effects across
-    users, with a mean estimated effect of \$8.40, standard deviation of \$5.57, minimum
-    of -\$13.73, and maximum of \$46.33. Notably, some users exhibit negative predicted
-    treatment effects, suggesting the discount may reduce net revenue for a subset of users.
+    users, with a mean estimated effect of $8.40, standard deviation of $5.57, minimum of -$13.73,
+    and maximum of $46.33.
 
     Because these estimates rely on model assumptions and observed covariates, they should be
     interpreted as exploratory evidence of potential heterogeneity rather than a validated targeting
