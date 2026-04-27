@@ -416,7 +416,7 @@ elif section == "ATE":
 elif section == "Event Study":
     st.header("Event Study")
 
-    fig, ax = plt.subplots(figsize=(7, 3.8))
+    fig, ax = plt.subplots(figsize=(8, 5))
     if {"ci_low", "ci_high"}.issubset(event_df.columns):
         yerr = [
             event_df["coef"] - event_df["ci_low"],
@@ -438,7 +438,7 @@ elif section == "Event Study":
     ax.set_ylabel("Estimated Effect")
     ax.set_title("Event Study: Dynamic Treatment Effects (Two-Way Fixed Effects)")
     plt.tight_layout()
-    st.pyplot(fig, width="stretch")
+    st.pyplot(fig, width="content")
 
     st.write("""
     The event study estimates week-by-week treatment effects relative to the final pre-treatment
@@ -461,7 +461,7 @@ elif section == "Model Comparison":
     st.header("Model Comparison")
     st.dataframe(model_table, width="stretch")
 
-    fig, ax = plt.subplots(figsize=(7, 3.8))
+    fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(model_table["Model"], model_table["Lift ($)"])
     ax.axhline(0)
     ax.set_title("Treatment Effect Estimates Across Models")
@@ -469,7 +469,7 @@ elif section == "Model Comparison":
     ax.set_xlabel("Model")
     plt.xticks(rotation=20)
     plt.tight_layout()
-    st.pyplot(fig, width="stretch")
+    st.pyplot(fig, width="content")
 
     st.write("""
     Treatment effect estimates vary substantially across specifications, ranging from positive to
@@ -501,31 +501,60 @@ elif section == "Synthetic Control":
             "treatment, while the second chart shows the estimated treatment effect over time."
         )
 
-        fig, ax = plt.subplots(figsize=(7, 3.8))
-        ax.plot(synthetic_df["event_time"], synthetic_df["treated"], marker="o", label="Treated")
+        # Chart 1: pre-fit check (levels)
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(
+            synthetic_df["event_time"],
+            synthetic_df["treated"],
+            marker="o",
+            label="Treated",
+        )
         ax.plot(
             synthetic_df["event_time"],
             synthetic_df["synthetic_control"],
             marker="o",
             label="Synthetic Control",
         )
-        ax.axvline(-1, linestyle="--")
-        ax.set_title("Treated vs Synthetic Control (Pre-Fit Check)")
+        ax.axvline(
+            -1,
+            linestyle="--",
+            alpha=0.6,
+            label="Treatment Start (t = -1)",
+        )
+        ax.set_title("Synthetic Control Robustness Check")
         ax.set_xlabel("Event Time")
         ax.set_ylabel("Average Revenue")
+        ax.grid(alpha=0.2)
         ax.legend()
         plt.tight_layout()
-        st.pyplot(fig, width="stretch")
+        st.pyplot(fig, width="content")
 
-        fig, ax = plt.subplots(figsize=(7, 3.8))
-        ax.plot(synthetic_df["event_time"], synthetic_df["effect"], marker="o")
-        ax.axhline(0, linestyle="--")
-        ax.axvline(-1, linestyle="--")
-        ax.set_title("Treated minus Synthetic Control (Estimated Effect)")
+        # Chart 2: estimated effect over time
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(
+            synthetic_df["event_time"],
+            synthetic_df["effect"],
+            marker="o",
+        )
+        ax.axhline(
+            0,
+            linestyle="--",
+            alpha=0.35,
+            label="Zero Effect (Baseline)",
+        )
+        ax.axvline(
+            -1,
+            linestyle="--",
+            alpha=0.6,
+            label="Treatment Start (t = -1)",
+        )
+        ax.set_title("Treated minus Synthetic Control Over Time")
         ax.set_xlabel("Event Time")
         ax.set_ylabel("Revenue Difference")
+        ax.grid(alpha=0.2)
+        ax.legend()
         plt.tight_layout()
-        st.pyplot(fig, width="stretch")
+        st.pyplot(fig, width="content")
     else:
         st.write(
             "Synthetic-control plot data is not included in this deployed view, but the final "
@@ -580,13 +609,13 @@ elif section == "HTE":
     st.header("Heterogeneous Treatment Effects")
     st.dataframe(hte_df, width="stretch")
 
-    fig, ax = plt.subplots(figsize=(7, 3.8))
+    fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(hte_df["quartile"], hte_df["lift"], marker="o")
     ax.set_title("Lift by Baseline Spend Quartile")
     ax.set_xlabel("Baseline Spend Quartile")
     ax.set_ylabel("Lift ($)")
     plt.tight_layout()
-    st.pyplot(fig, width="stretch")
+    st.pyplot(fig, width="content")
 
     st.markdown("### Causal Forest Summary")
     c1, c2, c3, c4 = st.columns(4)
