@@ -328,6 +328,9 @@ if synthetic_df is not None:
     if not pre_synth.empty:
         synthetic_rmse = float(np.sqrt(np.mean(pre_synth["effect"] ** 2)))
 
+# Match the notebook analysis sample: users included in the cumulative post-period ATE.
+analysis_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
+
 # ============================================================
 # Sidebar
 # ============================================================
@@ -354,7 +357,7 @@ section = st.sidebar.radio(
 
 if section == "Overview":
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Users", f"{panel_df['user_id'].nunique():,}")
+    c1.metric("Users (Analysis Sample)", f"{analysis_users:,}")
     c2.metric("Avg Weekly ATE", f"${weekly_ate['coef']:.2f}")
     c3.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
     c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
@@ -362,8 +365,8 @@ if section == "Overview":
     st.markdown("### Executive Takeaway")
     st.write(
         "The randomized A/B test indicates a positive revenue lift. The cumulative post-period "
-        f"ATE is approximately ${cumulative_ate['coef']:.2f} per user, while the average weekly "
-        f"post-period lift is approximately ${weekly_ate['coef']:.2f}. However, once discount cost "
+        f"ATE is approximately \\${cumulative_ate['coef']:.2f} per user, while the average weekly "
+        f"post-period lift is approximately \\${weekly_ate['coef']:.2f}. However, once discount cost "
         "is included, the average lift remains smaller than the cost of a blanket 10% offer. "
         "Profitability would likely require either a lower discount, more effective targeting, or "
         "a strategic context where short-term losses are acceptable."
@@ -530,16 +533,20 @@ elif section == "Synthetic Control":
     plt.tight_layout()
     st.pyplot(fig, width="content")
 
-    st.write("""
-    The synthetic control robustness check constructs a weighted combination of control cohorts that
-    more closely matches the treated group's pre-treatment revenue trajectory.
+    st.write(
+        "The synthetic control robustness check constructs a weighted combination of control cohorts "
+        "that more closely matches the treated group's pre-treatment revenue trajectory."
+    )
 
-    In the final notebook, the synthetic-control estimate is approximately +$2.11 per user, with a
-    pre-period fit RMSE of 2.38. This smaller estimate highlights sensitivity to how the
-    counterfactual is constructed.
+    st.write(
+        f"In the final notebook, the synthetic-control estimate is approximately "
+        f"\\${synthetic_effect:.2f} per user, with a pre-period fit RMSE of {synthetic_rmse:.2f}. "
+        "This smaller estimate highlights sensitivity to how the counterfactual is constructed."
+    )
 
-    This result is best interpreted as a robustness check rather than the primary causal estimate.
-    """)
+    st.write(
+        "This result is best interpreted as a robustness check rather than the primary causal estimate."
+    )
 
 # ============================================================
 # Business Impact
@@ -600,8 +607,8 @@ elif section == "HTE":
     revenue — rather than stronger causal responsiveness — drives much of the larger dollar impact.
 
     The causal forest estimates reveal meaningful variation in predicted treatment effects across
-    users, with a mean estimated effect of $8.40, standard deviation of $5.57, minimum of -$13.73,
-    and maximum of $46.33.
+    users, with a mean estimated effect of \\$8.40, standard deviation of \\$5.57, minimum of -\\$13.73,
+    and maximum of \\$46.33.
 
     Because these estimates rely on model assumptions and observed covariates, they should be
     interpreted as exploratory evidence of potential heterogeneity rather than a validated targeting
