@@ -21,6 +21,18 @@ End-to-end causal inference project estimating whether a 10% discount to high-LT
 
 ---
 
+## Screenshots
+
+**Overview** — key metrics at a glance
+
+![Overview](docs/screenshots/overview.png)
+
+**Business Impact** — cumulative lift vs. discount cost
+
+![Business Impact](docs/screenshots/business_impact.png)
+
+---
+
 ## Tech Stack
 
 | Layer | Tools |
