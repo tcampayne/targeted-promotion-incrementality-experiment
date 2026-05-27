@@ -1,176 +1,86 @@
-# 🧪 A/B Promotion Incrementality Analysis
+# A/B Promotion Incrementality Analysis
 
-## 📌 Overview
+End-to-end causal inference project estimating whether a 10% discount to high-LTV users drives incremental revenue — and whether it's worth rolling out.
 
-This project evaluates whether offering a **10% discount to high-LTV users** generates **true incremental revenue** or primarily subsidizes existing purchasing behavior.
-
-The analysis combines **randomized A/B testing**, **panel methods**, and **causal inference techniques** to assess both **average impact** and **model sensitivity**.
+> **Data note:** Revenue is simulated. An 8% uplift is applied to treated high-LTV users in the post-period, so results should be read as a portfolio experiment simulation rather than observed discount-redemption evidence.
 
 ---
 
-## ❓ Business Question
+## Key Findings
 
-> Does a 10% discount drive incremental revenue, or does it reduce margin by discounting purchases that would have occurred anyway?
+- **+8.2% simulated revenue lift** — post-period diff-in-means ATE of **+$28.50 per user** over observed post-weeks (95% CI: [$23.90, $33.11])
+- **DiD panel estimates recover roughly +8%/week** across Naive DiD, User FE, TWFE, and Weighted DiD specifications, consistent with the randomized ATE and confirming estimator validity on the simulated uplift
+- **Blanket discount is not attractive** under a simplified revenue-cost objective: the $28.50 cumulative lift does not cover the ~$37.79 estimated discount cost per user (net ≈ −$9.29/user)
+- **Causal forest / HTE** reveals meaningful variation in predicted treatment effects (mean ≈ $8.40, SD ≈ $5.57) — exploratory evidence of heterogeneity, not a validated targeting rule
 
----
+## Business Recommendation
 
-## 📊 Key Results
-
-- **+$8.50 incremental revenue per user**  
-- **95% CI:** [7.83, 9.16]  
-- **-$2.99 net impact per user** after discount cost  
-
-### ✅ Conclusion
-
-While the promotion increases revenue, it is **not profitable** at a 10% blanket discount level.
-
-This suggests:
-- Value in **targeted discounting**
-- Risk of **subsidizing existing behavior**
+- **Do not broadly roll out** the 10% blanket discount under a short-term revenue-cost objective
+- **Test lower discount levels or a validated targeting strategy** — higher-spend users show larger absolute lift, but a follow-up experiment is needed before deploying model-based targeting
+- **Track margin, retention, and downstream behavior** — this analysis uses simplified revenue-cost assumptions with no cannibalization, margin, or retention effects
 
 ---
 
-## 🚀 Interactive App
+## Tech Stack
 
-👉 **Live Streamlit App:**  
-https://targeted-promotion-incrementality-experiment-ltfx4qbfgnsn5ey2x.streamlit.app  
-
-The app includes:
-- A/B test results with confidence intervals  
-- Event study (TWFE) visualization  
-- Model comparison (Naive, FE, TWFE, Weighted DiD)  
-- Business impact breakdown  
-- Heterogeneous treatment effects  
+| Layer | Tools |
+|---|---|
+| Data pipeline | PostgreSQL, SQL marts (staging → core → marts) |
+| Analysis | Python, pandas, statsmodels, scikit-learn, EconML (causal forests) |
+| Dashboard | Streamlit |
 
 ---
 
-## 🧠 Experimental Design
+## Data Flow
 
-- Randomized controlled experiment  
-- ~61.9K users  
-- Treatment: 10% discount  
-- Control: no discount  
-- Multi-week panel dataset  
-
----
-
-## 🏗️ Data Pipeline
-
-Built a reproducible SQL pipeline:
-staging → core → marts
-
-- Cleaned and structured raw event data  
-- Created user-level and panel-level datasets  
-- Ensured experiment-ready schema for analysis  
+```
+data/raw/ (Instacart public dataset)
+  → PostgreSQL  (staging → core → marts)
+  → analysis/02_inference.ipynb  (reads DB, exports processed CSVs)
+  → app/streamlit_app.py  (reads processed CSVs, computes synthetic control live)
+```
 
 ---
 
-## 🔬 Methodology
+## How to Run
 
-### 1. A/B Test (Primary Estimate)
-- Post-period difference in means  
-- Interpreted as **Average Treatment Effect (ATE)**  
+**1. Set up environment variables**
 
----
+Create a `.env` file at the project root:
 
-### 2. Difference-in-Differences
+```
+DB_NAME=...
+DB_USER=...
+DB_PASSWORD=...
+DB_HOST=...
+DB_PORT=...
+```
 
-Estimated treatment effects using:
+**2. Run the notebook**
 
-- Naive DiD  
-- User fixed effects  
-- Two-way fixed effects (user + time)  
+Open and run `analysis/02_inference.ipynb` end-to-end. This exports:
+- `data/processed/panel_df.csv` — user-week panel (~440k rows)
+- `data/processed/event_study.csv` — TWFE event-study coefficients
 
----
+**3. Launch the Streamlit app**
 
-### 3. Event Study Analysis
+```powershell
+.venv\Scripts\Activate.ps1
+streamlit run app/streamlit_app.py
+```
 
-- Estimated dynamic treatment effects over time  
-- Used to validate the **parallel trends assumption**  
-
-### ⚠️ Finding:
-Pre-treatment trends differ between treatment and control groups, indicating a **violation of parallel trends**.
-
----
-
-### 4. Weighted DiD (Robustness Check)
-
-- Applied reweighting to improve comparability  
-- Adjusts for observable differences between groups  
-
-**Note:** Improves balance but does not fully resolve violations of parallel trends.
+**Live app:** https://targeted-promotion-incrementality-experiment-ltfx4qbfgnsn5ey2x.streamlit.app
 
 ---
 
-### 5. Heterogeneous Treatment Effects
+## Notebook
 
-- Implemented **causal forests (EconML)**  
-- Estimated user-level treatment effects  
+[`analysis/02_inference.ipynb`](analysis/02_inference.ipynb)
 
-### Finding:
-Users with higher baseline spend show **larger absolute revenue lift**, suggesting potential for targeted discount strategies.
-
----
-
-## ⚠️ Limitations
-
-- **Parallel trends assumption violated**, weakening DiD interpretation  
-- Revenue is simulated (not real transaction data)  
-- Discount cost model is simplified  
-- Results are sensitive to modeling assumptions  
-
----
-
-## 💡 Design Improvements
-
-Future experiments could be strengthened by:
-
-- **Stratified randomization** (e.g., by baseline spend / LTV)  
-- More granular user segmentation  
-- Longer pre-treatment observation windows  
-
----
-
-## 🔄 Analysis Workflow
-Raw Data → SQL Pipeline → Panel Dataset → A/B Test → DiD Models → Event Study → HTE → Business Decision
----
-
-## 🛠️ Tools & Technologies
-
-- SQL (data pipeline)  
-- Python (analysis)  
-- Pandas, NumPy  
-- Statsmodels (regression)  
-- EconML (causal forests)  
-- Streamlit (interactive app)  
-
----
-
-## 📂 Repo Structure
-data/
-raw/
-processed/
-
-sql/
-staging/
-core/
-marts/
-
-analysis/
-notebooks/
-
-app/
-streamlit_app.py
-
----
-
-## 🎯 Key Takeaways
-
-- Positive revenue lift does **not imply profitability**  
-- Randomized ATE is the most reliable estimate  
-- DiD estimates depend on assumptions and specification  
-- Parallel trends violations must be explicitly diagnosed  
-- Targeting is critical for promotion effectiveness  
-- Experimental design is as important as modeling  
-
----
+Covers:
+- Post-period ATE (primary estimate, randomized diff-in-means)
+- Event study (TWFE, parallel-trends diagnostics)
+- DiD, User FE, TWFE, Weighted DiD (robustness)
+- Synthetic control (cohort-level robustness)
+- Causal forest HTE (EconML, exploratory)
+- Business impact / ROI breakdown

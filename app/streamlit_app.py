@@ -109,15 +109,15 @@ def compute_model_table() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "Model": ["Naive DiD", "User FE DiD", "TWFE DiD", "Weighted DiD", "Synthetic Control"],
-            "Lift ($)": [8.74, 4.53, -1.58, 8.61, 2.11],
-            "95% CI Lower": [np.nan, np.nan, np.nan, 7.76, np.nan],
-            "95% CI Upper": [np.nan, np.nan, np.nan, 9.47, np.nan],
+            "Lift ($/week)": [8.74, 8.41, 8.41, 8.61, 10.94],
+            "95% CI Lower": [7.90, 7.67, 7.67, 7.76, np.nan],
+            "95% CI Upper": [9.59, 9.16, 9.15, 9.47, np.nan],
             "Interpretation": [
                 "Baseline DiD; likely sensitive to pre-period differences",
                 "Controls for time-invariant user heterogeneity",
-                "Two-way FE robustness check; estimate turns negative",
-                "Reweighted robustness check; positive but model-dependent",
-                "Synthetic-control robustness check; smaller positive estimate",
+                "Two-way FE; consistent with User FE estimate",
+                "Reweighted robustness check; positive and consistent with DiD range",
+                "Cohort-level robustness check; higher estimate likely reflects donor overfit with 6 pre-periods",
             ],
         }
     )
@@ -303,17 +303,19 @@ cumulative_ate = compute_cumulative_post_ate(panel_df)
 model_table = compute_model_table()
 hte_df = compute_quartile_hte(panel_df)
 
-# Business impact based on the average post-period user-week ATE, matching the notebook ROI section.
-treated_post_mean = panel_df.loc[
-    (panel_df["treatment_flag"] == 1) & (panel_df["post"] == 1),
-    "revenue_sim",
-].mean()
+# Business impact on cumulative basis, matching the notebook ROI section.
+treated_cumulative_mean = (
+    panel_df[(panel_df["treatment_flag"] == 1) & (panel_df["post"] == 1)]
+    .groupby("user_id")["revenue_sim"]
+    .sum()
+    .mean()
+)
 
 discount_rate = 0.10
-discount_cost = treated_post_mean * discount_rate
+discount_cost = treated_cumulative_mean * discount_rate  # cumulative discount cost per user
 
-ate_lift = weekly_ate["coef"]
-net_impact_per_user = ate_lift - discount_cost
+cumulative_lift = cumulative_ate["coef"]  # cumulative ATE per user
+net_impact_per_user = cumulative_lift - discount_cost
 num_treated_users = panel_df.loc[panel_df["treatment_flag"] == 1, "user_id"].nunique()
 total_impact = net_impact_per_user * num_treated_users
 
@@ -364,12 +366,12 @@ if section == "Overview":
 
     st.markdown("### Executive Takeaway")
     st.write(
-        "The randomized A/B test indicates a positive revenue lift. The cumulative post-period "
-        f"ATE is approximately \\${cumulative_ate['coef']:.2f} per user, while the average weekly "
-        f"post-period lift is approximately \\${weekly_ate['coef']:.2f}. However, once discount cost "
-        "is included, the average lift remains smaller than the cost of a blanket 10% offer. "
-        "Profitability would likely require either a lower discount, more effective targeting, or "
-        "a strategic context where short-term losses are acceptable."
+        "The randomized A/B test indicates a positive revenue lift of approximately "
+        f"\\${cumulative_ate['coef']:.2f} per user over observed post-weeks (+{cumulative_ate['pct_lift']:.1f}%). "
+        "However, once the 10% discount cost is deducted, the net cumulative impact is approximately "
+        f"\\${net_impact_per_user:.2f} per user — meaning a blanket rollout is not profitable under "
+        "a simplified short-term revenue-cost objective. Profitability would likely require a lower "
+        "discount rate, validated targeting, or a strategic context where short-term losses are acceptable."
     )
 
     st.markdown("### What this app covers")
@@ -460,10 +462,10 @@ elif section == "Model Comparison":
     st.dataframe(model_table, width="stretch")
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.bar(model_table["Model"], model_table["Lift ($)"])
+    ax.bar(model_table["Model"], model_table["Lift ($/week)"])
     ax.axhline(0)
     ax.set_title("Treatment Effect Estimates Across Models")
-    ax.set_ylabel("Estimated Lift ($)")
+    ax.set_ylabel("Estimated Lift ($/week)")
     ax.set_xlabel("Model")
     plt.xticks(rotation=20)
     plt.tight_layout()
@@ -556,8 +558,8 @@ elif section == "Business Impact":
     st.header("Business Impact & ROI Analysis")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Avg Weekly ATE Lift", f"${ate_lift:.2f}")
-    c2.metric("Discount Cost", f"${discount_cost:.2f}")
+    c1.metric("Cumulative ATE Lift / User", f"${cumulative_lift:.2f}")
+    c2.metric("Estimated Discount Cost / User", f"${discount_cost:.2f}")
     c3.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
 
     st.metric("Estimated Total Campaign Impact", f"${total_impact:,.2f}")
