@@ -99,6 +99,8 @@ def compute_cumulative_post_ate(df: pd.DataFrame) -> dict:
         "se": float(se),
         "ci_low": float(ci_low),
         "ci_high": float(ci_high),
+        "control_mean": float(control.mean()),
+        "treated_mean": float(treated.mean()),
         "n_treated_users": int(len(treated)),
         "n_control_users": int(len(control)),
     }
@@ -108,16 +110,16 @@ def compute_cumulative_post_ate(df: pd.DataFrame) -> dict:
 def compute_model_table() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "Model": ["Naive DiD", "User FE DiD", "TWFE DiD", "Weighted DiD", "Synthetic Control"],
-            "Lift ($/week)": [8.74, 8.41, 8.41, 8.61, 10.94],
-            "95% CI Lower": [7.90, 7.67, 7.67, 7.76, np.nan],
-            "95% CI Upper": [9.59, 9.16, 9.15, 9.47, np.nan],
+            "Model": ["Synthetic Control", "Naive DiD", "Weighted DiD", "User FE DiD", "TWFE DiD"],
+            "Lift ($/week)": [10.94, 8.74, 8.61, 8.41, 8.41],
+            "95% CI Lower": [np.nan, 7.90, 7.76, 7.67, 7.67],
+            "95% CI Upper": [np.nan, 9.59, 9.47, 9.16, 9.15],
             "Interpretation": [
+                "Cohort-level robustness check; higher estimate likely reflects donor overfit with 6 pre-periods",
                 "Baseline DiD; likely sensitive to pre-period differences",
+                "Reweighted robustness check; positive and consistent with DiD range",
                 "Controls for time-invariant user heterogeneity",
                 "Two-way FE; consistent with User FE estimate",
-                "Reweighted robustness check; positive and consistent with DiD range",
-                "Cohort-level robustness check; higher estimate likely reflects donor overfit with 6 pre-periods",
             ],
         }
     )
@@ -316,10 +318,12 @@ discount_cost = treated_cumulative_mean * discount_rate  # cumulative discount c
 
 cumulative_lift = cumulative_ate["coef"]  # cumulative ATE per user
 net_impact_per_user = cumulative_lift - discount_cost
+total_randomized_users = panel_df["user_id"].nunique()
 num_treated_users = cumulative_ate["n_treated_users"]
+gross_projected_lift = cumulative_lift * total_randomized_users
 total_impact = net_impact_per_user * num_treated_users
 
-# Synthetic-control summary from the final notebook
+# Synthetic-control summary from the recomputed series.
 synthetic_effect = 2.11
 synthetic_rmse = 2.38
 if synthetic_df is not None:
@@ -330,8 +334,8 @@ if synthetic_df is not None:
     if not pre_synth.empty:
         synthetic_rmse = float(np.sqrt(np.mean(pre_synth["effect"] ** 2)))
 
-# Match the notebook analysis sample: users included in the cumulative post-period ATE.
-analysis_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
+# Users included in the cumulative post-period ATE.
+observed_post_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
 
 # ============================================================
 # Sidebar
@@ -359,19 +363,25 @@ section = st.sidebar.radio(
 
 if section == "Overview":
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Users (Analysis Sample)", f"{analysis_users:,}")
-    c2.metric("Avg Weekly ATE", f"${weekly_ate['coef']:.2f}")
-    c3.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
-    c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
+    c1.metric("Eligible Users", f"{total_randomized_users:,}")
+    c2.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
+    c3.metric("Revenue Lift", f"{cumulative_ate['pct_lift']:.1f}%")
+    c4.metric("Projected Gross Lift", f"${gross_projected_lift / 1_000_000:.2f}M")
 
     st.markdown("### Executive Takeaway")
     st.write(
         "The randomized A/B test indicates a positive revenue lift of approximately "
         f"\\${cumulative_ate['coef']:.2f} per user over observed post-weeks (+{cumulative_ate['pct_lift']:.1f}%). "
-        "However, once the 10% discount cost is deducted, the net cumulative impact is approximately "
-        f"\\${net_impact_per_user:.2f} per user — meaning a blanket rollout is not profitable under "
-        "a simplified short-term revenue-cost objective. Profitability would likely require a lower "
-        "discount rate, validated targeting, or a strategic context where short-term losses are acceptable."
+        f"Scaled across {total_randomized_users:,} eligible randomized users, that is roughly "
+        f"\\${gross_projected_lift / 1_000_000:.2f}M in projected gross incremental revenue. "
+        "After subtracting a simplified 10% discount-cost estimate, the short-term net impact is "
+        f"\\${net_impact_per_user:.2f} per treated user, so a blanket rollout would need better targeting, "
+        "a lower discount rate, or a strategic goal beyond immediate revenue-cost profitability."
+    )
+
+    st.caption(
+        f"ATE estimates use {observed_post_users:,} users with observed post-period rows; the projected gross lift "
+        f"scales the per-user estimate across the full {total_randomized_users:,}-user eligible randomized sample."
     )
 
     st.markdown("### What this app covers")
@@ -395,6 +405,43 @@ elif section == "ATE":
     c3, c4 = st.columns(2)
     c3.metric("Average Weekly Post-Period ATE", f"${weekly_ate['coef']:.2f}")
     c4.metric("95% CI", f"[${weekly_ate['ci_low']:.2f}, ${weekly_ate['ci_high']:.2f}]")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    ate_yerr = np.array(
+        [
+            [cumulative_ate["coef"] - cumulative_ate["ci_low"]],
+            [cumulative_ate["ci_high"] - cumulative_ate["coef"]],
+        ]
+    )
+    axes[0].errorbar(
+        ["ATE"],
+        [cumulative_ate["coef"]],
+        yerr=ate_yerr,
+        fmt="o",
+        capsize=5,
+    )
+    axes[0].axhline(0, linestyle="--", color="gray", alpha=0.7)
+    axes[0].set_title("Post-Period ATE with 95% Confidence Interval\n(Randomized Diff-in-Means)")
+    axes[0].set_ylabel("Cumulative Post-Period Revenue Lift per User ($)")
+
+    group_labels = ["Control", "Treatment"]
+    group_values = [cumulative_ate["control_mean"], cumulative_ate["treated_mean"]]
+    bars = axes[1].bar(group_labels, group_values, color=["#4C72B0", "#DD8452"])
+    axes[1].set_title("Post-Period Revenue by Group")
+    axes[1].set_ylabel("Mean Post-Period Revenue per User ($)")
+    for bar, value in zip(bars, group_values):
+        axes[1].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 4,
+            f"${value:.0f}",
+            ha="center",
+            va="bottom",
+            fontweight="bold",
+        )
+
+    plt.tight_layout()
+    st.pyplot(fig, width="content")
 
     st.write(
         "The cumulative ATE measures the total post-period revenue difference per user, matching the "
@@ -430,12 +477,14 @@ elif section == "Event Study":
         yerr=yerr,
         fmt="o",
         capsize=4,
+        label="Estimated effect (vs. t=-1)",
     )
-    ax.axhline(0, linestyle="--")
-    ax.axvline(-1, linestyle="--")
+    ax.axhline(0, linestyle="--", color="gray", alpha=0.7, label="Zero effect")
+    ax.axvline(-0.5, linestyle="--", color="#E74C3C", alpha=0.85, label="Pre/Post Boundary")
     ax.set_xlabel("Week (Event Time)")
-    ax.set_ylabel("Estimated Effect")
-    ax.set_title("Event Study: Dynamic Treatment Effects (Two-Way Fixed Effects)")
+    ax.set_ylabel("Estimated Effect on Revenue ($)")
+    ax.set_title("Event Study: Weekly Treatment Effects Relative to t=-1 (TWFE)")
+    ax.legend()
     plt.tight_layout()
     st.pyplot(fig, width="content")
 
@@ -458,15 +507,18 @@ elif section == "Event Study":
 
 elif section == "Model Comparison":
     st.header("Model Comparison")
+    st.caption("Synthetic Control has no confidence interval; interpret it as a robustness check.")
     st.dataframe(model_table, width="stretch")
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.bar(model_table["Model"], model_table["Lift ($/week)"])
-    ax.axhline(0)
-    ax.set_title("Treatment Effect Estimates Across Models")
-    ax.set_ylabel("Estimated Lift ($/week)")
-    ax.set_xlabel("Model")
-    plt.xticks(rotation=20)
+    ax.barh(model_table["Model"], model_table["Lift ($/week)"])
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.invert_yaxis()
+    ax.set_title("Treatment Effect Estimates Across Specifications\n(Synthetic Control has no CI)")
+    ax.set_xlabel("Estimated Weekly Lift ($/week)")
+    ax.set_ylabel("Model")
+    for i, lift in enumerate(model_table["Lift ($/week)"]):
+        ax.text(lift + 0.1, i, f"${lift:.2f}/wk", va="center")
     plt.tight_layout()
     st.pyplot(fig, width="content")
 
@@ -509,7 +561,7 @@ elif section == "Synthetic Control":
         marker="o",
         label="Synthetic Control",
     )
-    ax.axvline(-1, linestyle="--", alpha=0.6, label="Treatment Start (t = -1)")
+    ax.axvline(-0.5, linestyle="--", alpha=0.6, label="Pre/Post Boundary")
     ax.set_title("Synthetic Control Robustness Check")
     ax.set_xlabel("Event Time")
     ax.set_ylabel("Average Revenue")
@@ -525,7 +577,7 @@ elif section == "Synthetic Control":
         marker="o",
     )
     ax.axhline(0, linestyle="--", alpha=0.35, label="Zero Effect (Baseline)")
-    ax.axvline(-1, linestyle="--", alpha=0.6, label="Treatment Start (t = -1)")
+    ax.axvline(-0.5, linestyle="--", alpha=0.6, label="Pre/Post Boundary")
     ax.set_title("Treated minus Synthetic Control Over Time")
     ax.set_xlabel("Event Time")
     ax.set_ylabel("Revenue Difference")
@@ -557,12 +609,35 @@ elif section == "Synthetic Control":
 elif section == "Business Impact":
     st.header("Business Impact & ROI Analysis")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Cumulative ATE Lift / User", f"${cumulative_lift:.2f}")
     c2.metric("Estimated Discount Cost / User", f"${discount_cost:.2f}")
     c3.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
+    c4.metric("Projected Gross Lift", f"${gross_projected_lift / 1_000_000:.2f}M")
 
-    st.metric("Estimated Total Campaign Impact", f"${total_impact:,.2f}")
+    st.metric("Estimated Net Campaign Impact (Observed Treated Users)", f"${total_impact:,.2f}")
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    labels = ["Revenue Lift", "Discount Cost", "Net Impact"]
+    values = [cumulative_lift, -discount_cost, net_impact_per_user]
+    colors = ["#4C72B0", "#DD8452", "#C44E52"]
+    bars = ax.bar(labels, values, color=colors)
+    ax.axhline(0, color="black", linewidth=0.8)
+    ax.set_title("Simplified Business Impact per Treated User (Post-Period)")
+    ax.set_ylabel("Dollars per User")
+    for bar, value in zip(bars, values):
+        va = "bottom" if value >= 0 else "top"
+        offset = 0.75 if value >= 0 else -0.75
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            value + offset,
+            f"${value:.2f}",
+            ha="center",
+            va=va,
+            fontweight="bold",
+        )
+    plt.tight_layout()
+    st.pyplot(fig, width="content")
 
     st.write("""
     While the randomized ATE indicates a positive incremental revenue effect, the cumulative lift of
@@ -585,11 +660,13 @@ elif section == "Business Impact":
 
 elif section == "HTE":
     st.header("Heterogeneous Treatment Effects")
+    st.caption("Quartile lift is observed post-period lift by baseline spend; causal forest metrics are exploratory notebook outputs.")
     st.dataframe(hte_df, width="stretch")
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(hte_df["quartile"], hte_df["lift"], marker="o")
-    ax.set_title("Lift by Baseline Spend Quartile")
+    ax.axhline(0, linestyle="--", color="gray", alpha=0.7)
+    ax.set_title("Observed Lift by Baseline Spend Quartile")
     ax.set_xlabel("Baseline Spend Quartile")
     ax.set_ylabel("Lift ($)")
     plt.tight_layout()
@@ -602,16 +679,24 @@ elif section == "HTE":
     c3.metric("Min Predicted Lift", "$-13.73")
     c4.metric("Max Predicted Lift", "$46.33")
 
+    c5, c6 = st.columns(2)
+    c5.metric("Top 20% Predicted Lift", "$16.55")
+    c6.metric("Bottom 80% Predicted Lift", "$6.36")
+
     st.write("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating
     larger absolute revenue gains.
 
     However, percentage lift is broadly similar across segments, suggesting that higher baseline
-    revenue — rather than stronger causal responsiveness — drives much of the larger dollar impact.
+    revenue, rather than stronger causal responsiveness, drives much of the larger dollar impact.
 
     The causal forest suggests exploratory variation in predicted lift across users, with a mean
     predicted lift of \\$8.40, standard deviation of \\$5.57, minimum of -\\$13.73,
     and maximum of \\$46.33.
+
+    The top 20% of users by predicted lift average \\$16.55, versus \\$6.36 for the remaining
+    80%. Because the simulation applies a uniform multiplier, this is best interpreted as
+    dollar-scale heterogeneity tied to baseline spend rather than a validated targeting rule.
 
     Because these estimates rely on model assumptions and observed covariates, they should be
     interpreted as exploratory evidence of potential heterogeneity rather than a validated targeting
