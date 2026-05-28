@@ -11,7 +11,6 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "data" / "processed"
 PANEL_CSV = DATA_DIR / "panel_df.csv"
 EVENT_CSV = DATA_DIR / "event_study.csv"
-SYNTHETIC_CSV = DATA_DIR / "synthetic_control.csv"
 
 # ============================================================
 # Helpers
@@ -136,21 +135,6 @@ def load_event_study(path: str) -> pd.DataFrame:
 
 
 @st.cache_data
-def load_synthetic_control(path: str) -> pd.DataFrame | None:
-    if not Path(path).exists():
-        return None
-
-    synth_df = pd.read_csv(path)
-    required_cols = {"event_time", "treated", "synthetic_control", "effect"}
-    missing = required_cols - set(synth_df.columns)
-    if missing:
-        raise ValueError(f"Missing required synthetic-control columns: {sorted(missing)}")
-    return synth_df.sort_values("event_time").reset_index(drop=True)
-
-
-
-
-@st.cache_data
 def compute_synthetic_control_from_panel(df: pd.DataFrame) -> pd.DataFrame:
     """Recompute the synthetic-control series using the same notebook logic.
 
@@ -241,42 +225,6 @@ def compute_synthetic_control_from_panel(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data
-def compute_quartile_hte(df: pd.DataFrame) -> pd.DataFrame:
-    user_pre = (
-        df[df["post"] == 0]
-        .groupby("user_id", as_index=False)
-        .agg(
-            baseline_revenue=("revenue_sim", "mean"),
-            treatment_flag=("treatment_flag", "max"),
-        )
-    )
-
-    user_post = (
-        df[df["post"] == 1]
-        .groupby("user_id", as_index=False)
-        .agg(post_revenue=("revenue_sim", "mean"))
-    )
-
-    user_df = user_pre.merge(user_post, on="user_id", how="inner")
-    user_df["quartile"] = pd.qcut(
-        user_df["baseline_revenue"],
-        4,
-        labels=["Q1 Low", "Q2", "Q3", "Q4 High"],
-    )
-
-    out = (
-        user_df.groupby(["quartile", "treatment_flag"], as_index=False, observed=False)["post_revenue"]
-        .mean()
-        .pivot(index="quartile", columns="treatment_flag", values="post_revenue")
-        .reset_index()
-        .rename(columns={0: "control", 1: "treated"})
-    )
-    out["lift"] = out["treated"] - out["control"]
-    out["pct_lift"] = out["lift"] / out["control"] * 100
-    return out
-
-
-@st.cache_data
 def compute_causal_forest_display() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Notebook causal-forest summary values for the deployed HTE view.
 
@@ -312,7 +260,7 @@ def compute_causal_forest_display() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
 # ============================================================
 
 st.title("10% Discount Incrementality Analysis")
-st.caption("Streamlit dashboard for the high-LTV discount causal inference project")
+st.caption("Simulated randomized experiment for a high-LTV user discount strategy")
 
 if not PANEL_CSV.exists():
     st.error(f"Could not find `{PANEL_CSV}`. Export your analysis dataset to CSV first, then rerun the app.")
@@ -334,7 +282,6 @@ except Exception as e:
 weekly_ate = compute_weekly_post_ate(panel_df)
 cumulative_ate = compute_cumulative_post_ate(panel_df)
 model_table = compute_model_table()
-hte_df = compute_quartile_hte(panel_df)
 
 # Business impact on cumulative basis, matching the notebook ROI section.
 treated_cumulative_mean = (
@@ -398,22 +345,30 @@ if section == "Overview":
     c2.metric("Avg Weekly ATE", f"${weekly_ate['coef']:.2f}")
     c3.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
     c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
+    st.caption(
+        f"The ATE sample includes {analysis_users:,} users with post-period experiment data; "
+        f"gross impact projections scale to {total_randomized_users:,} randomized users."
+    )
 
     st.markdown("### Executive Takeaway")
     st.write(
-        "The randomized A/B test indicates a positive revenue lift of approximately "
+        "The randomized test shows a positive revenue lift of approximately "
         f"\\${cumulative_ate['coef']:.2f} per user over observed post-weeks (+{cumulative_ate['pct_lift']:.1f}%). "
-        "However, once the 10% discount cost is deducted, the net cumulative impact is approximately "
+        "After subtracting the estimated 10% discount cost, the simplified net impact is approximately "
         f"\\${net_impact_per_user:.2f} per user, meaning a blanket rollout is not profitable under "
-        "a simplified short-term revenue-cost objective. Profitability would likely require a lower "
-        "discount rate, validated targeting, or a strategic context where short-term losses are acceptable."
+        "a short-term revenue-cost objective. The promotion would likely need tighter targeting, a lower "
+        "discount rate, or a strategic reason to accept short-term margin loss."
     )
 
     st.markdown("### What this app covers")
-    st.write(
-        "This dashboard summarizes the experimental ATE, event-study diagnostics, model comparison "
-        "across multiple DiD specifications, synthetic-control robustness, business impact, and "
-        "heterogeneity across baseline-spend segments."
+    st.markdown(
+        """
+        - Primary randomized ATE and confidence interval
+        - Event-study and DiD robustness checks
+        - Synthetic-control sensitivity check
+        - Revenue, discount cost, and net impact math
+        - Exploratory HTE from the causal forest notebook output
+        """
     )
 
 # ============================================================
@@ -474,15 +429,13 @@ elif section == "ATE":
     st.pyplot(fig, width="content")
 
     st.write(
-        "The cumulative ATE measures the total post-period revenue difference per user, matching the "
-        "primary notebook estimate. The average weekly ATE normalizes the same experiment over observed "
-        "weekly panel rows and helps reconcile the panel estimates with the cumulative result."
+        "The cumulative ATE is the main business-facing estimate: treated users generated about "
+        f"\\${cumulative_ate['coef']:.2f} more post-period revenue than control users on average."
     )
 
     st.write(
-        "Because treatment was randomized, the post-period ATE remains the primary causal estimate. "
-        "Panel-based methods such as DiD, TWFE, and synthetic control are used as robustness and "
-        "diagnostic checks."
+        "Because assignment was randomized, this post-period difference is the primary causal estimate. "
+        "The weekly ATE is included to connect the randomized result back to the panel-model diagnostics."
     )
 
 # ============================================================
@@ -519,16 +472,12 @@ elif section == "Event Study":
     st.pyplot(fig, width="content")
 
     st.write("""
-    The event study estimates week-by-week treatment effects relative to the final pre-treatment
-    period (week -1), while controlling for both user and time fixed effects.
+    The event study checks whether the treatment and control groups were already moving differently
+    before the discount period. Pre-period estimates are close to zero, while post-period estimates
+    move clearly positive after launch.
 
-    The pre-treatment coefficients show modest differences relative to the omitted baseline period.
-    Because event-study coefficients are normalized to a chosen reference period, this pattern may be
-    sensitive to which pre-treatment week is used as the baseline.
-
-    As a result, the event study suggests caution when interpreting panel-based DiD estimates, but it
-    should not be read as definitive evidence of a meaningful parallel trends violation. The randomized A/B
-    test remains the primary causal estimate.
+    This supports the overall direction of the result, but the randomized post-period ATE remains the
+    cleaner causal estimate. The event study is best used as a diagnostic, not the headline number.
     """)
 
 # ============================================================
@@ -538,7 +487,6 @@ elif section == "Event Study":
 elif section == "Model Comparison":
     st.header("Model Comparison")
     st.caption("Synthetic Control has no confidence interval; interpret it as a robustness check.")
-    st.dataframe(model_table, width="stretch")
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.barh(model_table["Model"], model_table["Lift ($/week)"])
@@ -554,14 +502,16 @@ elif section == "Model Comparison":
     st.pyplot(fig, width="content")
 
     st.write("""
-    The panel-based robustness checks are directionally consistent: Naive DiD, User FE, TWFE, and
-    Weighted DiD all estimate roughly $8.41 to $8.74 of lift per user-week. The synthetic-control
-    estimate is higher, which points to sensitivity in how the counterfactual is constructed.
+    The DiD-style models are directionally consistent, landing around $8.41 to $8.74 of lift per
+    user-week. Synthetic control is higher, which makes it useful as a sensitivity check but not the
+    main result.
 
-    The weighted DiD model improves comparability on observed characteristics, while the synthetic
-    control check constructs a better-matched control trajectory. However, neither replaces the
-    randomized post-period ATE, which remains the most reliable estimate of average causal impact.
+    Overall, the robustness checks support a positive treatment effect while reinforcing that the
+    randomized ATE is still the cleanest estimate of average impact.
     """)
+
+    with st.expander("Model details"):
+        st.dataframe(model_table, width="stretch")
 
 # ============================================================
 # Synthetic Control
@@ -638,19 +588,15 @@ elif section == "Synthetic Control":
     st.pyplot(fig, width="content")
 
     st.write(
-        "The synthetic control robustness check constructs a weighted combination of control cohorts "
-        "that more closely matches the treated group's pre-treatment revenue trajectory."
+        "Synthetic control builds a weighted control trajectory that tries to match the treated group "
+        "before the discount starts."
     )
 
     st.write(
-        f"In the final notebook, the synthetic-control estimate is approximately "
-        f"\\${synthetic_effect:.2f} per user-week, with a pre-period fit RMSE of {synthetic_rmse:.2f}. "
-        "Because this estimate is higher than the DiD range and uses only six pre-period weeks, it is "
-        "best read as a sensitivity check that may reflect donor overfit."
-    )
-
-    st.write(
-        "This result is best interpreted as a robustness check rather than the primary causal estimate."
+        f"The estimated post-period gap is approximately \\${synthetic_effect:.2f} per user-week, "
+        f"with a pre-period fit RMSE of {synthetic_rmse:.2f}. Because this estimate is higher than the "
+        "DiD range and uses only six pre-period weeks, I treat it as a sensitivity check rather than "
+        "the primary causal estimate."
     )
 
 # ============================================================
@@ -665,6 +611,10 @@ elif section == "Business Impact":
     c2.metric("Estimated Discount Cost / User", f"${discount_cost:.2f}")
     c3.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
     c4.metric("Projected Gross Lift", f"${gross_projected_lift / 1_000_000:.2f}M")
+    st.caption(
+        f"Gross lift scales the ATE to {total_randomized_users:,} randomized users. "
+        "Net campaign impact applies the discount cost to observed treated users."
+    )
 
     st.metric("Estimated Net Campaign Impact (Observed Treated Users)", f"${total_impact:,.2f}")
 
@@ -692,14 +642,16 @@ elif section == "Business Impact":
     st.pyplot(fig, width="content")
 
     st.write("""
-    While the randomized ATE indicates a positive incremental revenue effect, the cumulative lift of
-    \\$28.50 per user does not cover the estimated \\$37.79 cumulative cost of a 10% discount.
+    Gross lift and net impact answer two different questions. Gross lift asks how much incremental
+    revenue the discount created; net impact subtracts the estimated cost of giving the discount.
+
+    In this simplified view, the cumulative lift of \\$28.50 per user does not cover the estimated
+    \\$37.79 cumulative cost of a 10% discount.
 
     This implies that a blanket promotion is not profitable under a simplified short-term revenue-cost
-    objective.
-    However, the business decision depends on product context. If the promotion is intended to drive
-    trial for a new product, acquire customers, encourage repeat purchase, or clear slow-moving
-    inventory, a short-term loss may still be strategically acceptable.
+    objective. However, the business decision still depends on context. If the goal is acquisition,
+    repeat purchase, product trial, or inventory movement, a short-term loss may still be strategically
+    acceptable.
 
     This analysis assumes no cannibalization or long-term retention effects. Real deployment would
     require validation against observed transaction revenue, margin impact, inventory costs, and
@@ -713,8 +665,8 @@ elif section == "Business Impact":
 elif section == "HTE":
     st.header("Heterogeneous Treatment Effects")
     st.caption(
-        "Causal forest values come from the final EconML notebook run; the distribution is calibrated "
-        "to those saved summary outputs for Streamlit Cloud compatibility."
+        "The notebook fit the EconML causal forest; this dashboard displays the saved summary outputs "
+        "from that run."
     )
     cf_df, cf_hte_summary, cf_metrics = compute_causal_forest_display()
 
@@ -764,7 +716,7 @@ elif section == "HTE":
 
     st.write("""
     Most predicted user-level effects are positive, but the size of the lift varies. The top predicted-response
-    users average \\$16.55 per user-week, compared with \\$6.36 for the remaining 80%.
+    users average \\$16.55 per user-week, compared with \\$6.36 for the remaining users.
 
     Because the simulation applies a uniform treatment multiplier, I would treat this as exploratory
     dollar-scale heterogeneity tied partly to baseline spend, not a deployment-ready targeting rule.
