@@ -39,11 +39,6 @@ env/
 .ipynb_checkpoints/
 
 
-# =========================
-# Local assistant files
-# =========================
-.claude/
-
 
 # =========================
 # Env / Secrets

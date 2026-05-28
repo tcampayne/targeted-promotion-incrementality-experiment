@@ -1,6 +1,6 @@
 # A/B Promotion Incrementality Analysis
 
-This project estimates whether a simulated 10% discount for high-LTV users creates incremental revenue. It uses an A/B testing workflow, a Python notebook, and a Streamlit dashboard to turn the analysis into a recruiter-friendly business recommendation.
+This project estimates whether a simulated 10% discount for high-LTV users creates incremental revenue. It uses an A/B testing workflow, a Python notebook, and a Streamlit dashboard to connect the statistical results to a clear business recommendation.
 
 > **Data note:** Revenue is simulated. An 8% uplift is applied to treated high-LTV users in the post-period, so results should be read as a portfolio experiment simulation rather than observed discount-redemption evidence.
 
