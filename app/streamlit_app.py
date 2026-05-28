@@ -276,77 +276,35 @@ def compute_quartile_hte(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-@st.cache_data(show_spinner="Fitting causal forest for HTE view...")
-def compute_causal_forest_display(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Fit the same causal-forest display model used in the notebook."""
-    from econml.dml import CausalForestDML
-    from sklearn.ensemble import RandomForestRegressor
+@st.cache_data
+def compute_causal_forest_display() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Notebook causal-forest summary values for the deployed HTE view.
 
-    cf_df = df.copy()
-    cf_df["pre_post_flag"] = cf_df["pre_post_flag"].astype(str).str.strip().str.lower()
+    EconML is used in the notebook, but Streamlit Cloud currently runs this app on
+    Python 3.14, where EconML does not publish compatible wheels. The app therefore
+    displays the final notebook summary and an illustrative distribution calibrated
+    to those outputs.
+    """
+    rng = np.random.default_rng(42)
+    predicted_lift = np.clip(rng.normal(loc=8.40, scale=5.57, size=55_102), -13.73, 46.33)
 
-    pre_user = (
-        cf_df[cf_df["pre_post_flag"] == "pre"]
-        .groupby("user_id")
-        .agg(
-            baseline_revenue=("revenue_sim", "mean"),
-            pre_rev_std=("revenue_sim", "std"),
-            pre_weeks=("revenue_sim", "count"),
-            treatment_flag=("treatment_flag", "max"),
-        )
-        .reset_index()
+    cf_df = pd.DataFrame({"te_pred": predicted_lift})
+    cf_summary = pd.DataFrame(
+        {
+            "baseline_quartile": ["Q1 Low", "Q2", "Q3", "Q4 High"],
+            "te_pred": [5.31, 8.70, 9.28, 10.31],
+        }
     )
-    pre_user["pre_rev_std"] = pre_user["pre_rev_std"].fillna(0)
-
-    post_user = (
-        cf_df[cf_df["pre_post_flag"] == "post"]
-        .groupby("user_id")
-        .agg(post_revenue=("revenue_sim", "mean"))
-        .reset_index()
-    )
-
-    user_cf = pre_user.merge(post_user, on="user_id", how="inner").dropna().copy()
-
-    y = user_cf["post_revenue"].to_numpy()
-    treatment = user_cf["treatment_flag"].to_numpy()
-    features = user_cf[["baseline_revenue", "pre_rev_std", "pre_weeks"]].to_numpy()
-
-    cf = CausalForestDML(
-        model_y=RandomForestRegressor(n_estimators=100, min_samples_leaf=10, random_state=42),
-        model_t=RandomForestRegressor(n_estimators=100, min_samples_leaf=10, random_state=42),
-        n_estimators=200,
-        min_samples_leaf=10,
-        random_state=42,
-    )
-    cf.fit(y, treatment, X=features)
-    user_cf["te_pred"] = cf.effect(features)
-
-    user_cf["baseline_quartile"] = pd.qcut(
-        user_cf["baseline_revenue"],
-        4,
-        labels=["Q1 Low", "Q2", "Q3", "Q4 High"],
-    )
-
-    cf_summary = (
-        user_cf.groupby("baseline_quartile", observed=False)["te_pred"]
-        .mean()
-        .reset_index()
-    )
-
-    threshold = user_cf["te_pred"].quantile(0.8)
-    top_users = user_cf[user_cf["te_pred"] >= threshold]
-    other_users = user_cf[user_cf["te_pred"] < threshold]
-
     metrics = {
-        "mean": float(user_cf["te_pred"].mean()),
-        "std": float(user_cf["te_pred"].std()),
-        "min": float(user_cf["te_pred"].min()),
-        "max": float(user_cf["te_pred"].max()),
-        "pct_negative": float((user_cf["te_pred"] < 0).mean() * 100),
-        "top_20": float(top_users["te_pred"].mean()),
-        "bottom_80": float(other_users["te_pred"].mean()),
+        "mean": 8.40,
+        "std": 5.57,
+        "min": -13.73,
+        "max": 46.33,
+        "pct_negative": 4.4,
+        "top_20": 16.55,
+        "bottom_80": 6.36,
     }
-    return user_cf[["te_pred"]], cf_summary, metrics
+    return cf_df, cf_summary, metrics
 
 
 # ============================================================
@@ -767,8 +725,11 @@ elif section == "HTE":
     st.pyplot(fig, width="content")
 
     st.markdown("### Causal Forest Summary")
-    st.caption("Predicted lift comes from the same EconML causal forest specification used in the notebook.")
-    cf_df, cf_hte_summary, cf_metrics = compute_causal_forest_display(panel_df)
+    st.caption(
+        "Causal forest values come from the final EconML notebook run; the distribution is calibrated "
+        "to those saved summary outputs for Streamlit Cloud compatibility."
+    )
+    cf_df, cf_hte_summary, cf_metrics = compute_causal_forest_display()
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mean Predicted Lift", f"${cf_metrics['mean']:.2f}")
