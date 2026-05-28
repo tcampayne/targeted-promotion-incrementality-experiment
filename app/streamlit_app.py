@@ -334,8 +334,8 @@ if synthetic_df is not None:
     if not pre_synth.empty:
         synthetic_rmse = float(np.sqrt(np.mean(pre_synth["effect"] ** 2)))
 
-# Users included in the cumulative post-period ATE.
-observed_post_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
+# Match the notebook analysis sample: users included in the cumulative post-period ATE.
+analysis_users = cumulative_ate["n_treated_users"] + cumulative_ate["n_control_users"]
 
 # ============================================================
 # Sidebar
@@ -363,25 +363,19 @@ section = st.sidebar.radio(
 
 if section == "Overview":
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Eligible Users", f"{total_randomized_users:,}")
-    c2.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
-    c3.metric("Revenue Lift", f"{cumulative_ate['pct_lift']:.1f}%")
-    c4.metric("Projected Gross Lift", f"${gross_projected_lift / 1_000_000:.2f}M")
+    c1.metric("Users (Analysis Sample)", f"{analysis_users:,}")
+    c2.metric("Avg Weekly ATE", f"${weekly_ate['coef']:.2f}")
+    c3.metric("Cumulative Post ATE", f"${cumulative_ate['coef']:.2f}")
+    c4.metric("Net Impact / User", f"${net_impact_per_user:.2f}")
 
     st.markdown("### Executive Takeaway")
     st.write(
         "The randomized A/B test indicates a positive revenue lift of approximately "
         f"\\${cumulative_ate['coef']:.2f} per user over observed post-weeks (+{cumulative_ate['pct_lift']:.1f}%). "
-        f"Scaled across {total_randomized_users:,} eligible randomized users, that is roughly "
-        f"\\${gross_projected_lift / 1_000_000:.2f}M in projected gross incremental revenue. "
-        "After subtracting a simplified 10% discount-cost estimate, the short-term net impact is "
-        f"\\${net_impact_per_user:.2f} per treated user, so a blanket rollout would need better targeting, "
-        "a lower discount rate, or a strategic goal beyond immediate revenue-cost profitability."
-    )
-
-    st.caption(
-        f"ATE estimates use {observed_post_users:,} users with observed post-period rows; the projected gross lift "
-        f"scales the per-user estimate across the full {total_randomized_users:,}-user eligible randomized sample."
+        "However, once the 10% discount cost is deducted, the net cumulative impact is approximately "
+        f"\\${net_impact_per_user:.2f} per user, meaning a blanket rollout is not profitable under "
+        "a simplified short-term revenue-cost objective. Profitability would likely require a lower "
+        "discount rate, validated targeting, or a strategic context where short-term losses are acceptable."
     )
 
     st.markdown("### What this app covers")
