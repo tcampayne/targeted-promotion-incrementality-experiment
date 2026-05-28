@@ -712,34 +712,16 @@ elif section == "Business Impact":
 
 elif section == "HTE":
     st.header("Heterogeneous Treatment Effects")
-    st.caption("Quartile lift is observed post-period lift by baseline spend; causal forest metrics are exploratory notebook outputs.")
-    st.dataframe(hte_df, width="stretch")
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(hte_df["quartile"], hte_df["lift"], marker="o")
-    ax.axhline(0, linestyle="--", color="gray", alpha=0.7)
-    ax.set_title("Observed Lift by Baseline Spend Quartile")
-    ax.set_xlabel("Baseline Spend Quartile")
-    ax.set_ylabel("Lift ($)")
-    plt.tight_layout()
-    st.pyplot(fig, width="content")
-
-    st.markdown("### Causal Forest Summary")
     st.caption(
         "Causal forest values come from the final EconML notebook run; the distribution is calibrated "
         "to those saved summary outputs for Streamlit Cloud compatibility."
     )
     cf_df, cf_hte_summary, cf_metrics = compute_causal_forest_display()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     c1.metric("Mean Predicted Lift", f"${cf_metrics['mean']:.2f}")
-    c2.metric("Std Dev", f"${cf_metrics['std']:.2f}")
-    c3.metric("Min Predicted Lift", f"${cf_metrics['min']:.2f}")
-    c4.metric("Max Predicted Lift", f"${cf_metrics['max']:.2f}")
-
-    c5, c6 = st.columns(2)
-    c5.metric("Top 20% Predicted Lift", f"${cf_metrics['top_20']:.2f}")
-    c6.metric("Bottom 80% Predicted Lift", f"${cf_metrics['bottom_80']:.2f}")
+    c2.metric("Top 20% Predicted Lift", f"${cf_metrics['top_20']:.2f}")
+    c3.metric("Bottom 80% Predicted Lift", f"${cf_metrics['bottom_80']:.2f}")
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -781,21 +763,16 @@ elif section == "HTE":
     st.pyplot(fig, width="content")
 
     st.write("""
-    Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating
-    larger absolute revenue gains.
+    Most predicted user-level effects are positive, but the size of the lift varies. The top predicted-response
+    users average \\$16.55 per user-week, compared with \\$6.36 for the remaining 80%.
 
-    However, percentage lift is broadly similar across segments, suggesting that higher baseline
-    revenue, rather than stronger causal responsiveness, drives much of the larger dollar impact.
-
-    The causal forest suggests exploratory variation in predicted lift across users, with a mean
-    predicted lift of \\$8.40, standard deviation of \\$5.57, minimum of -\\$13.73,
-    and maximum of \\$46.33.
-
-    The top 20% of users by predicted lift average \\$16.55, versus \\$6.36 for the remaining
-    80%. Because the simulation applies a uniform multiplier, this is best interpreted as
-    dollar-scale heterogeneity tied to baseline spend rather than a validated targeting rule.
-
-    Because these estimates rely on model assumptions and observed covariates, they should be
-    interpreted as exploratory evidence of potential heterogeneity rather than a validated targeting
-    rule. A follow-up experiment would be needed before deploying model-based targeting.
+    Because the simulation applies a uniform treatment multiplier, I would treat this as exploratory
+    dollar-scale heterogeneity tied partly to baseline spend, not a deployment-ready targeting rule.
     """)
+
+    with st.expander("Notebook details"):
+        d1, d2, d3 = st.columns(3)
+        d1.metric("Std Dev", f"${cf_metrics['std']:.2f}")
+        d2.metric("Min Predicted Lift", f"${cf_metrics['min']:.2f}")
+        d3.metric("Max Predicted Lift", f"${cf_metrics['max']:.2f}")
+        st.dataframe(cf_hte_summary, width="stretch")
