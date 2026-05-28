@@ -276,6 +276,79 @@ def compute_quartile_hte(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+@st.cache_data(show_spinner="Fitting causal forest for HTE view...")
+def compute_causal_forest_display(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Fit the same causal-forest display model used in the notebook."""
+    from econml.dml import CausalForestDML
+    from sklearn.ensemble import RandomForestRegressor
+
+    cf_df = df.copy()
+    cf_df["pre_post_flag"] = cf_df["pre_post_flag"].astype(str).str.strip().str.lower()
+
+    pre_user = (
+        cf_df[cf_df["pre_post_flag"] == "pre"]
+        .groupby("user_id")
+        .agg(
+            baseline_revenue=("revenue_sim", "mean"),
+            pre_rev_std=("revenue_sim", "std"),
+            pre_weeks=("revenue_sim", "count"),
+            treatment_flag=("treatment_flag", "max"),
+        )
+        .reset_index()
+    )
+    pre_user["pre_rev_std"] = pre_user["pre_rev_std"].fillna(0)
+
+    post_user = (
+        cf_df[cf_df["pre_post_flag"] == "post"]
+        .groupby("user_id")
+        .agg(post_revenue=("revenue_sim", "mean"))
+        .reset_index()
+    )
+
+    user_cf = pre_user.merge(post_user, on="user_id", how="inner").dropna().copy()
+
+    y = user_cf["post_revenue"].to_numpy()
+    treatment = user_cf["treatment_flag"].to_numpy()
+    features = user_cf[["baseline_revenue", "pre_rev_std", "pre_weeks"]].to_numpy()
+
+    cf = CausalForestDML(
+        model_y=RandomForestRegressor(n_estimators=100, min_samples_leaf=10, random_state=42),
+        model_t=RandomForestRegressor(n_estimators=100, min_samples_leaf=10, random_state=42),
+        n_estimators=200,
+        min_samples_leaf=10,
+        random_state=42,
+    )
+    cf.fit(y, treatment, X=features)
+    user_cf["te_pred"] = cf.effect(features)
+
+    user_cf["baseline_quartile"] = pd.qcut(
+        user_cf["baseline_revenue"],
+        4,
+        labels=["Q1 Low", "Q2", "Q3", "Q4 High"],
+    )
+
+    cf_summary = (
+        user_cf.groupby("baseline_quartile", observed=False)["te_pred"]
+        .mean()
+        .reset_index()
+    )
+
+    threshold = user_cf["te_pred"].quantile(0.8)
+    top_users = user_cf[user_cf["te_pred"] >= threshold]
+    other_users = user_cf[user_cf["te_pred"] < threshold]
+
+    metrics = {
+        "mean": float(user_cf["te_pred"].mean()),
+        "std": float(user_cf["te_pred"].std()),
+        "min": float(user_cf["te_pred"].min()),
+        "max": float(user_cf["te_pred"].max()),
+        "pct_negative": float((user_cf["te_pred"] < 0).mean() * 100),
+        "top_20": float(top_users["te_pred"].mean()),
+        "bottom_80": float(other_users["te_pred"].mean()),
+    }
+    return user_cf[["te_pred"]], cf_summary, metrics
+
+
 # ============================================================
 # Load data
 # ============================================================
@@ -694,15 +767,57 @@ elif section == "HTE":
     st.pyplot(fig, width="content")
 
     st.markdown("### Causal Forest Summary")
+    st.caption("Predicted lift comes from the same EconML causal forest specification used in the notebook.")
+    cf_df, cf_hte_summary, cf_metrics = compute_causal_forest_display(panel_df)
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Mean Predicted Lift", "$8.40")
-    c2.metric("Std Dev", "$5.57")
-    c3.metric("Min Predicted Lift", "$-13.73")
-    c4.metric("Max Predicted Lift", "$46.33")
+    c1.metric("Mean Predicted Lift", f"${cf_metrics['mean']:.2f}")
+    c2.metric("Std Dev", f"${cf_metrics['std']:.2f}")
+    c3.metric("Min Predicted Lift", f"${cf_metrics['min']:.2f}")
+    c4.metric("Max Predicted Lift", f"${cf_metrics['max']:.2f}")
 
     c5, c6 = st.columns(2)
-    c5.metric("Top 20% Predicted Lift", "$16.55")
-    c6.metric("Bottom 80% Predicted Lift", "$6.36")
+    c5.metric("Top 20% Predicted Lift", f"${cf_metrics['top_20']:.2f}")
+    c6.metric("Bottom 80% Predicted Lift", f"${cf_metrics['bottom_80']:.2f}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    axes[0].hist(
+        cf_df["te_pred"],
+        bins=30,
+        color="steelblue",
+        edgecolor="white",
+        alpha=0.85,
+    )
+    axes[0].axvline(0, linestyle="--", color="gray", label="Zero lift")
+    axes[0].axvline(
+        cf_metrics["mean"],
+        linestyle="--",
+        color="#E74C3C",
+        label=f"Mean predicted lift: ${cf_metrics['mean']:.2f}",
+    )
+    axes[0].set_title(
+        "Distribution of Predicted User-Level Lift\n"
+        f"({cf_metrics['pct_negative']:.1f}% of users have negative predicted lift)"
+    )
+    axes[0].set_xlabel("Estimated Treatment Effect ($ per user-week)")
+    axes[0].set_ylabel("Number of Users")
+    axes[0].legend()
+
+    axes[1].plot(
+        cf_hte_summary["baseline_quartile"],
+        cf_hte_summary["te_pred"],
+        marker="o",
+        color="#4C72B0",
+    )
+    axes[1].axhline(0, linestyle="--", color="gray", alpha=0.7)
+    axes[1].set_ylim(0, cf_hte_summary["te_pred"].max() + 1.5)
+    axes[1].set_title("Causal Forest: Mean Predicted Lift by Baseline Spend Quartile")
+    axes[1].set_xlabel("Baseline Spend Quartile")
+    axes[1].set_ylabel("Mean Predicted Lift ($ per user-week)")
+
+    plt.tight_layout()
+    st.pyplot(fig, width="content")
 
     st.write("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating

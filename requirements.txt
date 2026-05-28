@@ -5,3 +5,4 @@ matplotlib
 scikit-learn
 scipy
 statsmodels>=0.14
+econml
