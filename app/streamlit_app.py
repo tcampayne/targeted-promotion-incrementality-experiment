@@ -323,9 +323,9 @@ num_treated_users = cumulative_ate["n_treated_users"]
 gross_projected_lift = cumulative_lift * total_randomized_users
 total_impact = net_impact_per_user * num_treated_users
 
-# Synthetic-control summary from the recomputed series.
-synthetic_effect = 2.11
-synthetic_rmse = 2.38
+# Synthetic-control summary from the recomputed notebook-matching series.
+synthetic_effect = 10.94
+synthetic_rmse = 2.27
 if synthetic_df is not None:
     post_synth = synthetic_df[synthetic_df["event_time"] >= 0]
     pre_synth = synthetic_df[synthetic_df["event_time"] < 0]
@@ -416,6 +416,10 @@ elif section == "ATE":
         capsize=5,
     )
     axes[0].axhline(0, linestyle="--", color="gray", alpha=0.7)
+    axes[0].set_ylim(
+        min(-2, cumulative_ate["ci_low"] - 5),
+        cumulative_ate["ci_high"] + 5,
+    )
     axes[0].set_title("Post-Period ATE with 95% Confidence Interval\n(Randomized Diff-in-Means)")
     axes[0].set_ylabel("Cumulative Post-Period Revenue Lift per User ($)")
 
@@ -424,6 +428,7 @@ elif section == "ATE":
     bars = axes[1].bar(group_labels, group_values, color=["#4C72B0", "#DD8452"])
     axes[1].set_title("Post-Period Revenue by Group")
     axes[1].set_ylabel("Mean Post-Period Revenue per User ($)")
+    axes[1].set_ylim(0, max(group_values) * 1.14)
     for bar, value in zip(bars, group_values):
         axes[1].text(
             bar.get_x() + bar.get_width() / 2,
@@ -511,6 +516,7 @@ elif section == "Model Comparison":
     ax.set_title("Treatment Effect Estimates Across Specifications\n(Synthetic Control has no CI)")
     ax.set_xlabel("Estimated Weekly Lift ($/week)")
     ax.set_ylabel("Model")
+    ax.set_xlim(0, model_table["Lift ($/week)"].max() + 1.1)
     for i, lift in enumerate(model_table["Lift ($/week)"]):
         ax.text(lift + 0.1, i, f"${lift:.2f}/wk", va="center")
     plt.tight_layout()
@@ -542,41 +548,61 @@ elif section == "Synthetic Control":
         "the treatment starts. The second chart shows the estimated treatment effect over time."
     )
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    axes[0].plot(
         synthetic_df["event_time"],
         synthetic_df["treated"],
         marker="o",
+        color="#DD8452",
         label="Treated",
     )
-    ax.plot(
+    axes[0].plot(
         synthetic_df["event_time"],
         synthetic_df["synthetic_control"],
         marker="o",
+        linestyle="--",
+        color="#4C72B0",
         label="Synthetic Control",
     )
-    ax.axvline(-0.5, linestyle="--", alpha=0.6, label="Pre/Post Boundary")
-    ax.set_title("Synthetic Control Robustness Check")
-    ax.set_xlabel("Event Time")
-    ax.set_ylabel("Average Revenue")
-    ax.grid(alpha=0.2)
-    ax.legend()
-    plt.tight_layout()
-    st.pyplot(fig, width="content")
+    axes[0].fill_between(
+        synthetic_df["event_time"],
+        synthetic_df["treated"],
+        synthetic_df["synthetic_control"],
+        where=synthetic_df["event_time"] >= 0,
+        alpha=0.15,
+        color="#DD8452",
+        label="Post-period gap",
+    )
+    axes[0].axvline(-0.5, linestyle="--", color="#E74C3C", alpha=0.75, label="Pre/Post Boundary")
+    axes[0].set_title("Revenue Trajectories: Treated vs. Synthetic Control")
+    axes[0].set_xlabel("Event Time (weeks)")
+    axes[0].set_ylabel("Average Weekly Revenue ($)")
+    axes[0].grid(alpha=0.2)
+    axes[0].legend()
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(
+    axes[1].plot(
         synthetic_df["event_time"],
         synthetic_df["effect"],
         marker="o",
+        color="steelblue",
+        label="Gap (Treated - Synthetic)",
     )
-    ax.axhline(0, linestyle="--", alpha=0.35, label="Zero Effect (Baseline)")
-    ax.axvline(-0.5, linestyle="--", alpha=0.6, label="Pre/Post Boundary")
-    ax.set_title("Treated minus Synthetic Control Over Time")
-    ax.set_xlabel("Event Time")
-    ax.set_ylabel("Revenue Difference")
-    ax.grid(alpha=0.2)
-    ax.legend()
+    axes[1].fill_between(
+        synthetic_df["event_time"],
+        synthetic_df["effect"],
+        0,
+        where=synthetic_df["event_time"] >= 0,
+        alpha=0.15,
+        color="steelblue",
+        label=f"Post-period mean: ${synthetic_effect:.2f}",
+    )
+    axes[1].axhline(0, linestyle="--", color="gray", alpha=0.7, label="Zero effect")
+    axes[1].axvline(-0.5, linestyle="--", color="#E74C3C", alpha=0.75, label="Pre/Post Boundary")
+    axes[1].set_title("Synthetic Control Gap: Treated Minus Counterfactual")
+    axes[1].set_xlabel("Event Time (weeks)")
+    axes[1].set_ylabel("Revenue Difference ($)")
+    axes[1].grid(alpha=0.2)
+    axes[1].legend()
     plt.tight_layout()
     st.pyplot(fig, width="content")
 
@@ -619,6 +645,7 @@ elif section == "Business Impact":
     ax.axhline(0, color="black", linewidth=0.8)
     ax.set_title("Simplified Business Impact per Treated User (Post-Period)")
     ax.set_ylabel("Dollars per User")
+    ax.set_ylim(min(values) - 6, max(values) + 6)
     for bar, value in zip(bars, values):
         va = "bottom" if value >= 0 else "top"
         offset = 0.75 if value >= 0 else -0.75
