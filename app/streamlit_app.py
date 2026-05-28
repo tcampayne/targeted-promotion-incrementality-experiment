@@ -316,7 +316,7 @@ discount_cost = treated_cumulative_mean * discount_rate  # cumulative discount c
 
 cumulative_lift = cumulative_ate["coef"]  # cumulative ATE per user
 net_impact_per_user = cumulative_lift - discount_cost
-num_treated_users = panel_df.loc[panel_df["treatment_flag"] == 1, "user_id"].nunique()
+num_treated_users = cumulative_ate["n_treated_users"]
 total_impact = net_impact_per_user * num_treated_users
 
 # Synthetic-control summary from the final notebook
@@ -398,9 +398,8 @@ elif section == "ATE":
 
     st.write(
         "The cumulative ATE measures the total post-period revenue difference per user, matching the "
-        "primary notebook estimate. The average weekly ATE normalizes the same experiment over weekly "
-        "panel observations and is used in the ROI section to compare average weekly lift against the "
-        "estimated 10% discount cost."
+        "primary notebook estimate. The average weekly ATE normalizes the same experiment over observed "
+        "weekly panel rows and helps reconcile the panel estimates with the cumulative result."
     )
 
     st.write(
@@ -472,9 +471,9 @@ elif section == "Model Comparison":
     st.pyplot(fig, width="content")
 
     st.write("""
-    Treatment effect estimates vary substantially across specifications, ranging from positive to
-    negative. This divergence suggests that estimates are sensitive to modeling choices and to
-    pre-treatment differences between treated and control users.
+    The panel-based robustness checks are directionally consistent: Naive DiD, User FE, TWFE, and
+    Weighted DiD all estimate roughly $8.41 to $8.74 of lift per user-week. The synthetic-control
+    estimate is higher, which points to sensitivity in how the counterfactual is constructed.
 
     The weighted DiD model improves comparability on observed characteristics, while the synthetic
     control check constructs a better-matched control trajectory. However, neither replaces the
@@ -542,8 +541,9 @@ elif section == "Synthetic Control":
 
     st.write(
         f"In the final notebook, the synthetic-control estimate is approximately "
-        f"\\${synthetic_effect:.2f} per user, with a pre-period fit RMSE of {synthetic_rmse:.2f}. "
-        "This smaller estimate highlights sensitivity to how the counterfactual is constructed."
+        f"\\${synthetic_effect:.2f} per user-week, with a pre-period fit RMSE of {synthetic_rmse:.2f}. "
+        "Because this estimate is higher than the DiD range and uses only six pre-period weeks, it is "
+        "best read as a sensitivity check that may reflect donor overfit."
     )
 
     st.write(
@@ -565,10 +565,11 @@ elif section == "Business Impact":
     st.metric("Estimated Total Campaign Impact", f"${total_impact:,.2f}")
 
     st.write("""
-    While the randomized ATE indicates a positive incremental revenue effect, the average weekly lift
-    remains smaller than the estimated cost of a 10% discount.
+    While the randomized ATE indicates a positive incremental revenue effect, the cumulative lift of
+    \\$28.50 per user does not cover the estimated \\$37.79 cumulative cost of a 10% discount.
 
-    This implies that a blanket promotion is not profitable under a short-term profitability objective.
+    This implies that a blanket promotion is not profitable under a simplified short-term revenue-cost
+    objective.
     However, the business decision depends on product context. If the promotion is intended to drive
     trial for a new product, acquire customers, encourage repeat purchase, or clear slow-moving
     inventory, a short-term loss may still be strategically acceptable.
@@ -596,10 +597,10 @@ elif section == "HTE":
 
     st.markdown("### Causal Forest Summary")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Mean TE", "$8.40")
+    c1.metric("Mean Predicted Lift", "$8.40")
     c2.metric("Std Dev", "$5.57")
-    c3.metric("Min TE", "$-13.73")
-    c4.metric("Max TE", "$46.33")
+    c3.metric("Min Predicted Lift", "$-13.73")
+    c4.metric("Max Predicted Lift", "$46.33")
 
     st.write("""
     Treatment lift is positive across all baseline spend quartiles, with higher-spend users generating
@@ -608,8 +609,8 @@ elif section == "HTE":
     However, percentage lift is broadly similar across segments, suggesting that higher baseline
     revenue — rather than stronger causal responsiveness — drives much of the larger dollar impact.
 
-    The causal forest estimates reveal meaningful variation in predicted treatment effects across
-    users, with a mean estimated effect of \\$8.40, standard deviation of \\$5.57, minimum of -\\$13.73,
+    The causal forest suggests exploratory variation in predicted lift across users, with a mean
+    predicted lift of \\$8.40, standard deviation of \\$5.57, minimum of -\\$13.73,
     and maximum of \\$46.33.
 
     Because these estimates rely on model assumptions and observed covariates, they should be

@@ -9,9 +9,9 @@ End-to-end causal inference project estimating whether a 10% discount to high-LT
 ## Key Findings
 
 - **+8.2% simulated revenue lift** — post-period diff-in-means ATE of **+$28.50 per user** over observed post-weeks (95% CI: [$23.90, $33.11])
-- **DiD panel estimates recover roughly +8%/week** across Naive DiD, User FE, TWFE, and Weighted DiD specifications, consistent with the randomized ATE and confirming estimator validity on the simulated uplift
+- **DiD panel estimates are roughly +$8.41 to +$8.74 per user-week** across Naive DiD, User FE, TWFE, and Weighted DiD specifications, consistent with the simulated uplift and the randomized ATE
 - **Blanket discount is not attractive** under a simplified revenue-cost objective: the $28.50 cumulative lift does not cover the ~$37.79 estimated discount cost per user (net ≈ −$9.29/user)
-- **Causal forest / HTE** reveals meaningful variation in predicted treatment effects (mean ≈ $8.40, SD ≈ $5.57) — exploratory evidence of heterogeneity, not a validated targeting rule
+- **Causal forest / HTE** suggests exploratory variation in predicted lift (mean ≈ $8.40, SD ≈ $5.57) — not a validated targeting rule
 
 ## Business Recommendation
 
