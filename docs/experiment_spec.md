@@ -1,40 +1,40 @@
-\# Experiment Spec: Targeted Discount Incrementality
+# Experiment Spec: Targeted Discount Incrementality
 
 
 
-\## Objective
+## Objective
 
-Measure incremental lift in revenue from offering a 10% discount to high-LTV users.
+Estimate whether a simulated 10% discount increases revenue for high-LTV users.
 
 
 
-\## Unit of randomization
+## Unit of randomization
 
 User-level.
 
 
 
-\## Eligibility
+## Eligibility
 
 High-LTV = top 30% of users ranked by pre-period revenue (6 weeks).
 
 
 
-\## Periods
+## Periods
 
 Pre: 6 weeks  
 
-Post: 6 weeks
+Post: 6 calendar weeks. Users may have fewer observed post-period weeks depending on purchase activity.
 
 
 
-\## Treatment
+## Treatment
 
-10% discount applied to post-period orders (simulated).
+Simulated 10% discount applied to treated users in the post period.
 
 
 
-\## Outcomes
+## Outcomes
 
 Primary: post-period revenue per user  
 
@@ -42,13 +42,15 @@ Secondary: AOV, orders/user
 
 
 
-\## Analysis Plan
+## Analysis Plan
 
 Balance: mean diffs, SMDs, t-tests  
 
 ATE: diff-in-means + OLS; 95% CI  
 
 Robustness: Difference-in-Differences (user-week panel)
+
+Business impact: cumulative revenue lift minus a simplified 10% discount-cost estimate.
 
 
 

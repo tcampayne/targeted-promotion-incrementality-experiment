@@ -1,6 +1,6 @@
 # A/B Promotion Incrementality Analysis
 
-End-to-end causal inference project estimating whether a 10% discount to high-LTV users drives incremental revenue — and whether it's worth rolling out.
+This project estimates whether a simulated 10% discount for high-LTV users creates incremental revenue. It uses an A/B testing workflow, a Python notebook, and a Streamlit dashboard to turn the analysis into a recruiter-friendly business recommendation.
 
 > **Data note:** Revenue is simulated. An 8% uplift is applied to treated high-LTV users in the post-period, so results should be read as a portfolio experiment simulation rather than observed discount-redemption evidence.
 
@@ -8,7 +8,7 @@ End-to-end causal inference project estimating whether a 10% discount to high-LT
 
 ## Key Findings
 
-- **+8.2% simulated revenue lift** — post-period diff-in-means ATE of **+$28.50 per user** over observed post-weeks (95% CI: [$23.90, $33.11])
+- **+8.2% simulated revenue lift** — the primary A/B test estimate shows **+$28.50 per user** over observed post-weeks (95% CI: [$23.90, $33.11])
 - **DiD panel estimates are roughly +$8.41 to +$8.74 per user-week** across Naive DiD, User FE, TWFE, and Weighted DiD specifications, consistent with the simulated uplift and the randomized ATE
 - **Blanket discount is not attractive** under a simplified revenue-cost objective: the $28.50 cumulative lift does not cover the ~$37.79 estimated discount cost per user (net ≈ −$9.29/user)
 - **Causal forest / HTE** suggests exploratory variation in predicted lift (mean ≈ $8.40, SD ≈ $5.57) — not a validated targeting rule
@@ -90,7 +90,7 @@ streamlit run app/streamlit_app.py
 [`analysis/02_inference.ipynb`](analysis/02_inference.ipynb)
 
 Covers:
-- Post-period ATE (primary estimate, randomized diff-in-means)
+- Post-period ATE, the primary A/B test estimate
 - Event study (TWFE, parallel-trends diagnostics)
 - DiD, User FE, TWFE, Weighted DiD (robustness)
 - Synthetic control (cohort-level robustness)
