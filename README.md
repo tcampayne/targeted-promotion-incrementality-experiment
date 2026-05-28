@@ -9,14 +9,14 @@ This project estimates whether a simulated 10% discount for high-LTV users creat
 ## Key Findings
 
 - **+8.2% simulated revenue lift** — the A/B test shows **+$28.50 per user** in incremental revenue over the post-period (95% confidence interval: [$23.90, $33.11])
-- **Multiple methods agree** — four panel regression models all estimate +$8–9 per user per week in lift, consistent with the A/B test result and confirming the primary estimate is robust across specifications
-- **Blanket discount is not worth it** under a simplified cost model: the $28.50 revenue lift does not cover the ~$37.79 estimated discount cost per user (net impact: −$9.29/user)
-- **User-level variation in lift exists** — a causal forest model suggests some users respond much more strongly than others, but this is exploratory and would need a follow-up experiment before informing any targeting decision
+- **Panel robustness checks are consistent** — four panel models estimate about +$8–9 per user per week, which supports the main A/B test result
+- **Blanket discount is not attractive** under a simplified cost model: the $28.50 revenue lift does not cover the ~$37.79 estimated discount cost per user (net impact: −$9.29/user)
+- **User-level variation may exist** — an exploratory causal forest model suggests some users may respond more strongly than others, but this would need a follow-up experiment before using it for targeting
 
 ## Business Recommendation
 
 - **Do not broadly roll out** the 10% blanket discount under a short-term revenue-cost objective
-- **Test lower discount levels or a targeting strategy** — higher-spend users show larger absolute lift, but model-based targeting needs validation before deployment
+- **Test lower discount levels or a targeting strategy** — higher-spend users show larger dollar lift, but model-based targeting needs validation before deployment
 - **Track margin, retention, and downstream behavior** — this analysis uses simplified revenue-cost assumptions with no cannibalization, margin, or retention effects
 
 ---
