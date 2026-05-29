@@ -502,7 +502,7 @@ elif section == "Model Comparison":
     st.pyplot(fig, width="content")
 
     st.write("""
-    The DiD-style models are directionally consistent, landing around $8.41 to $8.74 of lift per
+    The DiD-style models are directionally consistent, landing around \\$8.41 to \\$8.74 of lift per
     user-week. Synthetic control is higher, which makes it useful as a sensitivity check but not the
     main result.
 

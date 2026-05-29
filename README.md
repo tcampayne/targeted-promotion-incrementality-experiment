@@ -35,6 +35,10 @@ This project estimates whether a simulated 10% discount for high-LTV users creat
 
 ![Business Impact](docs/screenshots/business_impact.png)
 
+**Synthetic Control** — robustness check against a matched control trajectory
+
+![Synthetic Control](docs/screenshots/synthetic_control.png)
+
 **HTE** — exploratory causal forest summary
 
 ![HTE](docs/screenshots/hte.png)
