@@ -380,11 +380,11 @@ elif section == "ATE":
 
     c1, c2 = st.columns(2)
     c1.metric("Cumulative Post-Period ATE", f"${cumulative_ate['coef']:.2f}")
-    c2.metric("95% CI", f"[${cumulative_ate['ci_low']:.2f}, ${cumulative_ate['ci_high']:.2f}]")
+    c2.metric("95% CI ($)", f"{cumulative_ate['ci_low']:.2f} to {cumulative_ate['ci_high']:.2f}")
 
     c3, c4 = st.columns(2)
     c3.metric("Average Weekly Post-Period ATE", f"${weekly_ate['coef']:.2f}")
-    c4.metric("95% CI", f"[${weekly_ate['ci_low']:.2f}, ${weekly_ate['ci_high']:.2f}]")
+    c4.metric("95% CI ($)", f"{weekly_ate['ci_low']:.2f} to {weekly_ate['ci_high']:.2f}")
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -613,7 +613,7 @@ elif section == "Business Impact":
     c4.metric("Projected Gross Lift", f"${gross_projected_lift / 1_000_000:.2f}M")
     st.caption(
         f"Gross lift scales the ATE to {total_randomized_users:,} randomized users. "
-        "Net campaign impact applies the discount cost to observed treated users."
+        "Net impact subtracts the estimated discount cost for observed treated users."
     )
 
     st.metric("Estimated Net Campaign Impact (Observed Treated Users)", f"${total_impact:,.2f}")
@@ -642,16 +642,16 @@ elif section == "Business Impact":
     st.pyplot(fig, width="content")
 
     st.write("""
-    Gross lift and net impact answer two different questions. Gross lift asks how much incremental
-    revenue the discount created; net impact subtracts the estimated cost of giving the discount.
+    This is the key business wrinkle: the discount creates incremental revenue, but the promotion still
+    has to pay for itself.
 
     In this simplified view, the cumulative lift of \\$28.50 per user does not cover the estimated
-    \\$37.79 cumulative cost of a 10% discount.
+    \\$37.79 cumulative cost of a 10% discount. That makes the blanket promotion negative on short-term
+    net impact, even though the experiment shows a real revenue lift.
 
-    This implies that a blanket promotion is not profitable under a simplified short-term revenue-cost
-    objective. However, the business decision still depends on context. If the goal is acquisition,
-    repeat purchase, product trial, or inventory movement, a short-term loss may still be strategically
-    acceptable.
+    That does not make the test a failure. It means the better next step is not "ship it to everyone,"
+    but refine the strategy: lower the discount, target users more selectively, or justify the loss with
+    a longer-term goal such as acquisition, repeat purchase, product trial, or inventory movement.
 
     This analysis assumes no cannibalization or long-term retention effects. Real deployment would
     require validation against observed transaction revenue, margin impact, inventory costs, and
@@ -665,8 +665,8 @@ elif section == "Business Impact":
 elif section == "HTE":
     st.header("Heterogeneous Treatment Effects")
     st.caption(
-        "The notebook fit the EconML causal forest; this dashboard displays the saved summary outputs "
-        "from that run."
+        "The notebook fit the EconML causal forest; this dashboard uses notebook summary stats and "
+        "a simulated distribution calibrated to those outputs."
     )
     cf_df, cf_hte_summary, cf_metrics = compute_causal_forest_display()
 
@@ -692,10 +692,10 @@ elif section == "HTE":
         label=f"Mean predicted lift: ${cf_metrics['mean']:.2f}",
     )
     axes[0].set_title(
-        "Distribution of Predicted User-Level Lift\n"
-        f"({cf_metrics['pct_negative']:.1f}% of users have negative predicted lift)"
+        "Calibrated Distribution of User-Level Lift\n"
+        f"({cf_metrics['pct_negative']:.1f}% of simulated user-level effects are negative)"
     )
-    axes[0].set_xlabel("Estimated Treatment Effect ($ per user-week)")
+    axes[0].set_xlabel("Simulated Treatment Effect ($ per user-week)")
     axes[0].set_ylabel("Number of Users")
     axes[0].legend()
 

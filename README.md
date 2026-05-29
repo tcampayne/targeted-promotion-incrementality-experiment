@@ -27,9 +27,17 @@ This project estimates whether a simulated 10% discount for high-LTV users creat
 
 ![Overview](docs/screenshots/overview.png)
 
+**ATE** — primary randomized experiment estimate
+
+![ATE](docs/screenshots/ate.png)
+
 **Business Impact** — cumulative lift vs. discount cost
 
 ![Business Impact](docs/screenshots/business_impact.png)
+
+**HTE** — exploratory causal forest summary
+
+![HTE](docs/screenshots/hte.png)
 
 ---
 
